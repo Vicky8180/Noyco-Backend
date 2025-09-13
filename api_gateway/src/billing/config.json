@@ -1,0 +1,81 @@
+{
+    "lite": {
+        "max_agents": 5,
+        "available_services": [
+            "checkpoint",
+            "primary",
+            "checklist",
+            "medication",
+            "privacy"
+        ],
+        "memory_stack": [
+            "redis",
+            "mongo"
+        ],
+        "summarizer_available": false,
+        "human_escalation_available": false,
+        "model_tier": "gemini-flash",
+        "max_context_length": 8000,
+        "rate_limit_per_minute": 100
+    },
+    "pro": {
+        "max_agents": 15,
+        "available_services": [
+            "checkpoint",
+            "primary",
+            "checklist",
+            "medication",
+            "nutrition",
+            "privacy"
+        ],
+        "memory_stack": [
+            "redis",
+            "mongo",
+            "pinecone"
+        ],
+        "summarizer_available": true,
+        "human_escalation_available": true,
+        "model_tier": "gemini-pro",
+        "max_context_length": 32000,
+        "rate_limit_per_minute": 500
+    },
+    "hobby": {
+        "max_agents": 5,
+        "available_services": [
+            "checkpoint",
+            "primary",
+            "checklist",
+            "medication",
+            "privacy"
+        ],
+        "memory_stack": [
+            "redis",
+            "mongo"
+        ],
+        "summarizer_available": false,
+        "human_escalation_available": false,
+        "model_tier": "gemini-flash",
+        "max_context_length": 8000,
+        "rate_limit_per_minute": 100
+    },
+    "basic": {
+        "max_agents": 15,
+        "available_services": [
+            "checkpoint",
+            "primary",
+            "checklist",
+            "medication",
+            "nutrition",
+            "privacy"
+        ],
+        "memory_stack": [
+            "redis",
+            "mongo"
+        ],
+        "summarizer_available": true,
+        "human_escalation_available": true,
+        "model_tier": "gemini-pro",
+        "max_context_length": 32000,
+        "rate_limit_per_minute": 500
+    }
+}

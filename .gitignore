@@ -1,0 +1,65 @@
+# venv
+# myvenv
+# .venv
+# .myvenv
+# ./venv
+# /venv
+# ./_pycache_
+# __pycache__
+
+# ./__pycache__
+.pyc
+
+# Virtual environments
+venv/
+.venv/
+myvenv/
+.myvenv/
+./checkpoint/__pycache__/main.cpython-311.pyc
+# Python cache
+__pycache__/
+*/__pycache__/
+
+# Compiled Python files
+*.py[cod]
+
+**/__pycache__/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+# Ignore Python bytecode files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+**/__pycache__/
+
+
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.pyc
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+.envrc
+
+# Pytest
+.cache/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+
+# Ignore conversationalUI folder
+conversationalUI/
+.env
+/.env 
+D:/Pap_Anoop/projects/polaris/conversationalEngine/.env
