@@ -63,3 +63,10 @@ conversationalUI/
 .env
 /.env 
 D:/Pap_Anoop/projects/polaris/conversationalEngine/.env
+
+
+
+# Google credentials
+api_gateway/src/phone/google-credentials.json
+keys/google-cloudvision-credentials.json
+keys/google-healthcare-credentials.json
