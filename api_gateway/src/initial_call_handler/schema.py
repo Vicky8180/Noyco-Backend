@@ -7,20 +7,20 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 
 class AgentType(str, Enum):
-    EMOTIONAL_COMPANION = "emotional_companion"
-    ACCOUNTABILITY_BUDDY = "accountability_buddy" 
-    VOICE_COMPANION = "voice_companion"
-    THERAPY_CHECKIN = "therapy_checkin"
-    SOCIAL_ANXIETY_PREP = "social_anxiety_prep"
+    EMOTIONAL_COMPANION = "emotional"
+    ACCOUNTABILITY_BUDDY = "accountability" 
+    VOICE_COMPANION = "loneliness"
+    THERAPY_CHECKIN = "mental_therapy"
+    SOCIAL_ANXIETY_PREP = "social_anxiety"
     
     def get_agent_name(self) -> str:
         """Get the human-readable name of the agent"""
         agent_names = {
-            "emotional_companion": "Emotional Companion Agent",
-            "accountability_buddy": "Accountability Buddy",
-            "voice_companion": "Chronically Lonely People Agent",
-            "therapy_checkin": "Mental Health Check-In",
-            "social_anxiety_prep": "Pre-Social Anxiety Prep Agent"
+            "emotional": "Emotional Companion Agent",
+            "accountability": "Accountability Buddy",
+            "loneliness": "Chronically Lonely People Agent",
+            "mental_therapy": "Mental Health Check-In",
+            "social_anxiety": "Pre-Social Anxiety Prep Agent"
         }
         return agent_names.get(self.value, self.value)
 

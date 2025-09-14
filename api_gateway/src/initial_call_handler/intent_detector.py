@@ -34,15 +34,15 @@ class IntentDetector:
 
         ANALYZE FOR THESE SPECIFIC INTENTS:
 
-        1. **emotional_support**: User is dealing with grief, loss, terminal illness, death of loved ones, bereavement, or similar devastating life events. Look for words like: died, death, funeral, grief, terminal, cancer, hospice, devastated, mourning, widow, bereaved, loss.
+        1. **emotional**: User is dealing with grief, loss, terminal illness, death of loved ones, bereavement, or similar devastating life events. Look for words like: died, death, funeral, grief, terminal, cancer, hospice, devastated, mourning, widow, bereaved, loss.
 
         2. **accountability**: User needs help with habit changes, addiction recovery, quitting behaviors, therapy compliance, or maintaining commitments. Look for: quit, quitting, sober, sobriety, addiction, recovery, relapse, stop smoking, drinking, therapy compliance, accountability, habit.
 
-        3. **companionship**: User expresses loneliness, social isolation, lack of meaningful connections, or need for regular social interaction. Look for: alone, lonely, isolated, no friends, no one to talk to, isolation, companionship, social support.
+        3. **loneliness**: User expresses loneliness, social isolation, lack of meaningful connections, or need for regular social interaction. Look for: alone, lonely, isolated, no friends, no one to talk to, isolation, companionship, social support.
 
-        4. **mental_health**: User seeks support for anxiety, depression, panic, PTSD, therapy needs, or mental health crisis situations. Look for: therapy, therapist, anxiety, depression, panic attacks, ptsd, mental health, counseling, psychiatric, crisis.
+        4. **mental_therapy**: User seeks support for anxiety, depression, panic, PTSD, therapy needs, or mental health crisis situations. Look for: therapy, therapist, anxiety, depression, panic attacks, ptsd, mental health, counseling, psychiatric, crisis.
 
-        5. **social_preparation**: User needs help preparing for specific social events, presentations, interviews, dates, or performance situations. Look for: interview, presentation, public speaking, date, meeting, performance, social event, nervous about, prepare for.
+        5. **social_anxiety**: User needs help preparing for specific social events, presentations, interviews, dates, or performance situations. Look for: interview, presentation, public speaking, date, meeting, performance, social event, nervous about, prepare for.
 
         IMPORTANT: Only assign high confidence (80%+) if there are clear, specific indicators. If the conversation is too general or ambiguous, assign lower confidence and "none" intent.
 
@@ -119,7 +119,7 @@ class IntentDetector:
                 keywords = result_dict.get("keywords", [])
                 
                 # Validate intent is one of our expected values
-                valid_intents = ["emotional_support", "accountability", "companionship", "mental_health", "social_preparation", "none"]
+                valid_intents = ["emotional", "accountability", "loneliness", "mental_therapy", "social_anxiety", "none"]
                 if intent not in valid_intents:
                     intent = "none"
                     confidence = 0.0
@@ -160,7 +160,7 @@ class IntentDetector:
             match = re.search(pattern, response_text, re.IGNORECASE)
             if match:
                 potential_intent = match.group(1).lower().strip()
-                valid_intents = ["emotional_support", "accountability", "companionship", "mental_health", "social_preparation", "none"]
+                valid_intents =  ["emotional", "accountability", "loneliness", "mental_therapy", "social_anxiety", "none"]
                 if potential_intent in valid_intents:
                     intent = potential_intent
                     break

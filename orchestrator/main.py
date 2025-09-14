@@ -34,9 +34,6 @@ from orchestrator.state_manager import cache_manager
 import orchestrator.services
 import uvicorn
 
-# Import direct streaming function for loneliness agent
-from specialists.agents.loneliness.loneliness_agent import stream_loneliness_response
-
 # Get settings
 settings = get_settings()
 
@@ -206,13 +203,19 @@ class SimplifiedOrchestrator:
             _logger.info("Starting new conversation - generating initial checkpoints")
 
             timing.start("checkpoint_generation")
+            # Get conversation context for better checkpoint generation
+            conversation_context = await state.get_context(plan="lite")
+            
             checkpoints_task = asyncio.create_task(
                 call_service(
                     f"{settings.CHECKPOINT_URL}/generate",
                     {
                         "text": query.text,
                         "conversation_id": query.conversation_id,
-                        "limit": 2  # Initial generation limited to 2 checkpoints
+                        "limit": 2,  # Initial generation limited to 2 checkpoints
+                        "detected_intent": query.detected_agent,  # Pass the detected agent as intent
+                        "agent_type": query.detected_agent,       # Also pass as agent_type for clarity
+                        "conversation_context": conversation_context  # Pass full conversation context
                     },
                     timing,
                     "checkpoint_generator",
@@ -281,12 +284,16 @@ class SimplifiedOrchestrator:
         text: str, 
         context: List[Dict], 
         existing_task_id: str,
-        state
+        state,
+        detected_agent: str = None
     ):
         """Generate next checkpoint in the background."""
         _logger.info(f"Generating next checkpoint in the background for task {existing_task_id}")
         
         try:
+            # Get conversation context for enhanced checkpoint generation
+            conversation_context = await state.get_context(plan="lite")
+            
             # Call checkpoint service to generate a single new checkpoint
             result = await call_service(
                 f"{settings.CHECKPOINT_URL}/generate",
@@ -295,7 +302,10 @@ class SimplifiedOrchestrator:
                     "conversation_id": conversation_id,
                     "context": context,
                     "limit": 1,  # Just generate 1 additional checkpoint
-                    "existing_task_id": existing_task_id
+                    "existing_task_id": existing_task_id,
+                    "detected_intent": detected_agent,
+                    "agent_type": detected_agent,
+                    "conversation_context": conversation_context
                 },
                 TimingMetrics(),
                 "background_checkpoint_generator",
@@ -394,7 +404,8 @@ async def orchestrate_endpoint(
                             query.text,
                             context,
                             task.get('task_id'),
-                            state
+                            state,
+                            query.detected_agent
                         )
                     break
 
@@ -404,15 +415,6 @@ async def orchestrate_endpoint(
         # Get context with caching
         context = await _orchestrator.get_cached_context(state, query.plan, query.text)
         
-        # Get any stored results from previous interactions
-        # stored_async_results = state.get_async_agent_results()
-        # if asyncio.iscoroutine(stored_async_results):
-        #     stored_async_results = await stored_async_results
-        
-        # Get unconsumed sync results
-        # unconsumed_sync_results = state.get_unconsumed_agent_results()
-        # if asyncio.iscoroutine(unconsumed_sync_results):
-        #     unconsumed_sync_results = await unconsumed_sync_results
         
         timing.end("primary_service_preparation")
 
@@ -436,7 +438,7 @@ async def orchestrate_endpoint(
                 settings.LONELINESS_SERVICE_URL,
                 loneliness_payload,
                 timing,
-                "loneliness_companion",
+                "loneliness",
                 timeout=PRIMARY_TIMEOUT
             )
         elif query.detected_agent == "accountability":
