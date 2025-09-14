@@ -107,10 +107,52 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
             refresh_token = request.cookies.get(self.jwt_auth.refresh_token_cookie)
             if refresh_token and path != "/auth/refresh":
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Access token expired. Please refresh your token."}
-                )
+                # 🛠️ Attempt silent refresh when access token is missing but refresh token exists
+                try:
+                    token_data = self.jwt_auth.verify_refresh_token(refresh_token)
+                    from api_gateway.src.auth.controller import AuthController
+                    auth_controller = AuthController()
+                    user_id = token_data.get("user_id")
+                    role_entity_id = token_data.get("role_entity_id")
+                    user_data = await auth_controller.get_user_data_for_token(user_id, role_entity_id)
+
+                    new_access_token = self.jwt_auth.create_access_token(
+                        user_id,
+                        role_entity_id,
+                        user_data["role"],
+                        user_data["email"],
+                        user_data.get("plan")
+                    )
+
+                    # 🔥 CRITICAL: Set user context for downstream handlers
+                    new_user = self.jwt_auth.verify_access_token(new_access_token)
+                    request.state.user = new_user
+
+                    # Handle CSRF token validation if required
+                    if path in self.csrf_protected_routes or request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+                        csrf_token = request.headers.get("X-CSRF-Token")
+                        if not csrf_token:
+                            return JSONResponse(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                content={"detail": "CSRF token required"}
+                            )
+                        # Note: CSRF validation will happen after refresh, using new token in cookies
+
+                    # Check permissions before proceeding
+                    if not await self.check_service_permission(request, new_user):
+                        return JSONResponse(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            content={"detail": "Insufficient permissions for this service"}
+                        )
+
+                    # Proceed with original request and set fresh cookies
+                    response = await call_next(request)
+                    self.jwt_auth.set_auth_cookies(response, new_access_token, refresh_token)
+
+                    return response
+                except HTTPException:
+                    # Fall through and return 401 below
+                    pass
 
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -147,11 +189,53 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         except HTTPException as e:
-            if e.status_code == status.HTTP_401_UNAUTHORIZED and request.cookies.get(self.jwt_auth.refresh_token_cookie):
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Access token expired. Please refresh your token."}
-                )
+            # 🚀 Automatic access token refresh using refresh token cookie
+            if (
+                e.status_code == status.HTTP_401_UNAUTHORIZED
+                and request.cookies.get(self.jwt_auth.refresh_token_cookie)
+            ):
+                refresh_token = request.cookies.get(self.jwt_auth.refresh_token_cookie)
+
+                try:
+                    # 1️⃣ Verify refresh token (raises if invalid / expired)
+                    token_data = self.jwt_auth.verify_refresh_token(refresh_token)
+
+                    # 2️⃣ Fetch latest user data (role / email / plan) on-the-fly
+                    from api_gateway.src.auth.controller import AuthController  # Local import to avoid circular deps
+
+                    auth_controller = AuthController()
+                    user_id = token_data.get("user_id")
+                    role_entity_id = token_data.get("role_entity_id")
+
+                    user_data = await auth_controller.get_user_data_for_token(
+                        user_id, role_entity_id
+                    )
+
+                    # 3️⃣ Issue new access token and attach refreshed cookies
+                    new_access_token = self.jwt_auth.create_access_token(
+                        user_id,
+                        role_entity_id,
+                        user_data["role"],
+                        user_data["email"],
+                        user_data.get("plan"),
+                    )
+
+                    # Re-verify to obtain claims & attach to request for downstream handlers
+                    new_user = self.jwt_auth.verify_access_token(new_access_token)
+                    request.state.user = new_user
+
+                    # Proceed with original request and set fresh cookies on outgoing response
+                    response = await call_next(request)
+                    self.jwt_auth.set_auth_cookies(response, new_access_token, refresh_token)
+
+                    return response
+
+                except HTTPException:
+                    # Fall through to standard 401 handling below
+                    pass
+
+            # This block is now redundant - the refresh logic above handles this case
+            # Keeping for any edge cases not covered above
 
             return JSONResponse(
                 status_code=e.status_code,
