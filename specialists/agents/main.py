@@ -22,7 +22,7 @@ settings = get_settings()
 from .accountability.minimal_agent import process_message as accountability_process
 # Use the minimal therapy agent that mirrors accountability behavior
 from .therapy.minimal_agent import process_message as therapy_process
-from .loneliness.loneliness_agent import process_message as loneliness_process
+from .loneliness.loneliness_agent import process_message as loneliness_companion_process
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -142,10 +142,10 @@ async def therapy_health_check():
     """Health check endpoint for therapy agent"""
     return {"status": "ok", "service": "therapy_agent", "agent": "therapy_checkin"}
 
-@app.get("/loneliness/health")
+@app.get("/loneliness-companion/health")
 async def loneliness_health_check():
-    """Health check endpoint for loneliness agent"""
-    return {"status": "ok", "service": "loneliness_agent", "agent": "loneliness"}
+    """Health check endpoint for loneliness companion agent"""
+    return {"status": "ok", "service": "loneliness_agent", "agent": "loneliness_companion"}
 
 @app.post("/accountability/process")
 async def process_accountability_message(request: AccountabilityAgentRequest):
@@ -211,13 +211,13 @@ async def process_therapy_message(request: TherapyAgentRequest):
         _logger.error(f"Error in therapy agent: {e}")
         raise HTTPException(status_code=500, detail=f"Therapy agent error: {str(e)}")
 
-@app.post("/loneliness/process", response_model=AgentResponse)
-async def process_loneliness(request: LonelinessCompanionRequest):
-    """Process loneliness agent requests"""
+@app.post("/loneliness-companion/process", response_model=AgentResponse)
+async def process_loneliness_companion(request: LonelinessCompanionRequest):
+    """Process loneliness companion agent requests"""
     try:
         start_time = time.time()
         
-        result = await loneliness_process(
+        result = await loneliness_companion_process(
             user_query=request.user_query,
             context=request.context,
             checkpoint=request.checkpoint,
@@ -235,13 +235,13 @@ async def process_loneliness(request: LonelinessCompanionRequest):
             checkpoint_status=result.get("checkpoint_status", "completed"),
             requires_human=result.get("requires_human", False),
             processing_time=processing_time,
-            agent_type="loneliness",
+            agent_type="loneliness_companion",
             agent_specific_data=result.get("agent_specific_data", {})
         )
         
     except Exception as e:
-        _logger.error(f"Error in loneliness agent: {e}")
-        raise HTTPException(status_code=500, detail=f"Loneliness agent error: {str(e)}")
+        _logger.error(f"Error in loneliness companion: {e}")
+        raise HTTPException(status_code=500, detail=f"Loneliness companion error: {str(e)}")
 
 
 
@@ -255,12 +255,11 @@ async def process_loneliness(request: LonelinessCompanionRequest):
 #   "agent_instance_id": "loneliness_597",
 #   "user_id": "individual_f068689a7d96"
 # }
-# STREAMING DISABLED - Commented out WebSocket endpoint
-# @app.websocket("/loneliness/stream")
-async def loneliness_websocket(websocket: WebSocket):
-    """WebSocket endpoint for REAL streaming loneliness responses"""
+@app.websocket("/loneliness-companion/stream")
+async def loneliness_companion_websocket(websocket: WebSocket):
+    """WebSocket endpoint for REAL streaming loneliness companion responses"""
     await websocket.accept()
-    _logger.info("Loneliness WebSocket connection established")
+    _logger.info("Loneliness companion WebSocket connection established")
     
     try:
         while True:
@@ -370,9 +369,9 @@ async def loneliness_websocket(websocket: WebSocket):
 
 
 
-@app.get("/loneliness/daily-call")
+@app.get("/loneliness-companion/daily-call")
 async def daily_loneliness_call():
-    """Daily wellness call for loneliness agent"""
+    """Daily wellness call for loneliness companion"""
     return {"message": "Daily wellness check initiated", "status": "ok"}
 
 @app.get("/agents")
@@ -382,7 +381,8 @@ async def get_available_agents():
         "agents": [
             {"name": "accountability_buddy", "endpoint": "/accountability/process"},
             {"name": "therapy_checkin", "endpoint": "/therapy/process"},
-            {"name": "loneliness", "endpoint": "/loneliness/process"}
+            {"name": "loneliness_companion", "endpoint": "/loneliness-companion/process"},
+            {"name": "loneliness_companion_stream", "endpoint": settings.LONELINESS_WEBSOCKET_URL or "ws://localhost:8015/loneliness-companion/stream", "type": "websocket"}
         ]
     }
 
@@ -410,7 +410,7 @@ async def root():
     return {
         "message": "Specialized Support Agents API",
         "version": "1.0.0",
-        "available_agents": ["accountability_buddy", "therapy_checkin", "loneliness"]
+        "available_agents": ["accountability_buddy", "therapy_checkin", "loneliness_companion"]
     }
 
 # Run the application

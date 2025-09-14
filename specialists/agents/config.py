@@ -31,9 +31,12 @@ class AgentsSettings(BaseSettings):
     AGENTS_SERVICE_HOST: str = "0.0.0.0"
     
     # Service URLs (for cross-service communication)
-    LONELINESS_SERVICE_URL: Optional[str] = "http://localhost:8015/loneliness/process"
+    LONELINESS_SERVICE_URL: Optional[str] = "http://localhost:8015/loneliness-companion/process"
     ACCOUNTABILITY_SERVICE_URL: Optional[str] = "http://localhost:8015/accountability/process"
     THERAPY_SERVICE_URL: Optional[str] = "http://localhost:8015/therapy/process"
+    
+    # WebSocket URLs
+    LONELINESS_WEBSOCKET_URL: Optional[str] = "ws://localhost:8015/loneliness-companion/stream"
     
     class Config:
         env_file = ".env"

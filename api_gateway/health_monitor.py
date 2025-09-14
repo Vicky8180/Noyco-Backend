@@ -24,7 +24,7 @@ class HealthMonitor:
             "checkpoint": f"{self.settings.CHECKPOINT_URL}/health",
             "primary_agent": "http://localhost:8004/health",
             "checklist_agent": "http://localhost:8007/health", 
-            "loneliness_agent": "http://localhost:8015/loneliness/health",
+            "loneliness_agent": "http://localhost:8015/loneliness-companion/health",
             "accountability_agent": "http://localhost:8015/accountability/health",
             "therapy_agent": "http://localhost:8015/therapy/health"
         }
@@ -235,7 +235,7 @@ class HealthMonitor:
             "Primary Agent": "http://localhost:8004/health",
             "Checklist Agent": "http://localhost:8007/health", 
             "Specialized Agents": "http://localhost:8015/health",
-            "Loneliness Companion": "http://localhost:8015/loneliness/health",
+            "Loneliness Companion": "http://localhost:8015/loneliness-companion/health",
             "Accountability Agent": "http://localhost:8015/accountability/health",
             "Therapy Agent": "http://localhost:8015/therapy/health"
         }

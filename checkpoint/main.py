@@ -51,9 +51,6 @@ class CheckpointRequest(BaseModel):
     context: Optional[List[Dict[str, str]]] = None
     limit: Optional[int] = 2
     existing_task_id: Optional[str] = None
-    detected_intent: Optional[str] = None  # Intent detected by the system
-    agent_type: Optional[str] = None       # Type of agent assigned
-    conversation_context: Optional[List[Dict[str, Any]]] = None  # Full conversation history
 
 class CheckpointResponse(BaseModel):
     task: Task
@@ -75,10 +72,7 @@ async def generate_endpoint(request: CheckpointRequest):
             request.text,
             request.task_type, 
             context=request.context, 
-            limit=request.limit,
-            detected_intent=request.detected_intent,
-            agent_type=request.agent_type,
-            conversation_context=request.conversation_context
+            limit=request.limit
         )
 
         # Create checkpoint objects
