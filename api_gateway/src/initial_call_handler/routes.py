@@ -39,6 +39,38 @@ executor = ThreadPoolExecutor(max_workers=6)
 conversations: Dict[str, List[ConversationMessage]] = {}
 user_agents: Dict[str, Dict] = {}
 
+def clear_user_intent_state_internal(user_id: str) -> bool:
+    """
+    Internal function to clear user intent state - bypasses authentication
+    This is called directly from livekit.py for session resets
+    """
+    cleared_any = False
+    
+    if user_id in conversations:
+        del conversations[user_id]
+        cleared_any = True
+        print(f"Cleared conversation history for user {user_id}")
+    
+    if user_id in user_agents:
+        del user_agents[user_id]
+        cleared_any = True
+        print(f"Cleared agent assignment for user {user_id}")
+    
+    # Also clear common fallback user IDs to be thorough
+    fallback_ids = ["default_user", "profile_default"]
+    for fallback_id in fallback_ids:
+        if fallback_id in conversations:
+            del conversations[fallback_id]
+            cleared_any = True
+            print(f"Cleared fallback conversation history for {fallback_id}")
+        
+        if fallback_id in user_agents:
+            del user_agents[fallback_id]
+            cleared_any = True
+            print(f"Cleared fallback agent assignment for {fallback_id}")
+    
+    return cleared_any
+
 async def run_intent_detection_parallel(conversation_history: List[ConversationMessage]) -> "IntentResult":
     """Run intent detection in parallel using thread pool"""
     loop = asyncio.get_event_loop()

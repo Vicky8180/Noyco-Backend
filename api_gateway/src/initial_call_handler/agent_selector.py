@@ -9,11 +9,11 @@ from .schema import AgentType, AgentSelection, IntentResult
 class AgentSelector:
     def __init__(self):
         self.intent_to_agent = {
-            "emotional_support": AgentType.EMOTIONAL_COMPANION,
+            "emotional": AgentType.EMOTIONAL_COMPANION,
             "accountability": AgentType.ACCOUNTABILITY_BUDDY,
-            "companionship": AgentType.VOICE_COMPANION,
-            "mental_health": AgentType.THERAPY_CHECKIN,
-            "social_preparation": AgentType.SOCIAL_ANXIETY_PREP
+            "loneliness": AgentType.VOICE_COMPANION,
+            "mental_therapy": AgentType.THERAPY_CHECKIN,
+            "social_anxirty": AgentType.SOCIAL_ANXIETY_PREP
         }
         
         # Updated threshold - route at 80%+ confidence as requested
