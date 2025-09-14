@@ -20,7 +20,7 @@ class OrchestratorSettings(BaseSettings):
     MEDICATION_SERVICE_URL: str = "http://localhost:8012/process"
     
     # Specialized Agent Services
-    LONELINESS_SERVICE_URL: str = "http://localhost:8015/loneliness-companion/process"
+    LONELINESS_SERVICE_URL: str = "http://localhost:8015/loneliness/process"
     ACCOUNTABILITY_SERVICE_URL: str = "http://localhost:8015/accountability/process"
     THERAPY_SERVICE_URL: str = "http://localhost:8015/therapy/process"
     

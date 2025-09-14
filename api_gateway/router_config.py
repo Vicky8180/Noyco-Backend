@@ -20,15 +20,11 @@ def setup_routers(app):
     # Import all routers
     from .src.auth.routes import router as auth_router
     from .src.auth.otp_routes import router as otp_router
-    from .src.patients.routes import patient_router as patients_router
     from .src.phone.routes import phone_router as phone_router
     from .src.schedule.routes import schedule_router as schedule_router
     from .src.schedule.routes import tracking_router as tracking_router
-    from .src.dataEHR.routes import router as dataehr_router
-    from .src.dataEHR.routes import router as dataehr_r1_router
     from .src.billing.routes import router as billing_router
     from .src.stripe.routes import router as stripe_router
-    from .src.individual.MediScan.routes import router as mediscan_router
     from .src.userProfile.routes import router as userprofile_router
     from .src.initial_call_handler.routes import app as initial_call_handler_router
     from .src.livekit.livekit import router as livekit_router
@@ -40,7 +36,6 @@ def setup_routers(app):
     app.include_router(otp_router, tags=["OTP"])
     
     # Patient management
-    app.include_router(patients_router, tags=["Patients"])
     app.include_router(userprofile_router, tags=["User Profiles"])
     
     # Communication services
@@ -49,9 +44,6 @@ def setup_routers(app):
     app.include_router(tracking_router, tags=["Tracking"])
     
     # Data and EHR
-    app.include_router(dataehr_router, tags=["EHR Data"])
-    app.include_router(dataehr_r1_router, tags=["EHR Data v1"])
-    app.include_router(mediscan_router, tags=["Medical Scanning"])
     
     # Billing and payments
     app.include_router(billing_router, tags=["Billing"])
