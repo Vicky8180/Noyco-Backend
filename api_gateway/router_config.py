@@ -30,6 +30,7 @@ def setup_routers(app):
     from .src.livekit.livekit import router as livekit_router
     from .src.metrics.routes import router as metrics_router
     from .src.metrics.agent_routes import router as agent_metrics_router
+    from .src.documentation.router import router as documentation_router
 
     # Core authentication and user management
     app.include_router(auth_router, tags=["Authentication"])
@@ -56,5 +57,8 @@ def setup_routers(app):
     # Analytics and monitoring
     app.include_router(metrics_router, tags=["Metrics"])
     app.include_router(agent_metrics_router, tags=["Agent Metrics"])
+    
+    # Documentation
+    app.include_router(documentation_router, tags=["Documentation"])
 
     return app

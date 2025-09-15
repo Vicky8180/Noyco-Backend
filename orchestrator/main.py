@@ -450,12 +450,27 @@ async def orchestrate_endpoint(
                 else:
                     checkpoint_str = str(current_checkpoint)
             
+            # Convert context to string format expected by accountability agent
+            context_str = ""
+            if context:
+                if isinstance(context, list) and context:
+                    # Take first context item if it's a list
+                    context_item = context[0] if context else {}
+                    if isinstance(context_item, dict):
+                        context_str = str(context_item.get('day', 'monday'))
+                    else:
+                        context_str = str(context_item)
+                elif isinstance(context, dict):
+                    context_str = str(context.get('day', 'monday'))
+                else:
+                    context_str = str(context)
+            
             accountability_payload = {
-                "text": query.text,
+                "user_query": query.text,                     # Changed from "text" to "user_query"
                 "conversation_id": query.conversation_id,
-                "checkpoint": checkpoint_str,
-                "context": {'day':'monday'},
-                "individual_id": query.individual_id,
+                "checkpoint": checkpoint_str or "",           # Ensure string
+                "context": context_str,                       # Changed from dict to string
+                "user_id": query.individual_id,               # Changed from "individual_id" to "user_id" 
                 "user_profile_id": query.user_profile_id,
                 "agent_instance_id": query.agent_instance_id
             }

@@ -19,7 +19,7 @@ from .config import get_settings
 settings = get_settings()
 
 # Import agent processors
-from .accountability.minimal_agent import process_message as accountability_process
+from .accountability.accountability_agent_v2 import AccountabilityAgentV2
 # Use the minimal therapy agent that mirrors accountability behavior
 from .therapy.minimal_agent import process_message as therapy_process
 from .loneliness.loneliness_agent import process_message as loneliness_process
@@ -49,11 +49,11 @@ class AgentRequest(BaseModel):
     task_stack: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 class AccountabilityAgentRequest(BaseModel):
-    text: str = Field(..., description="User query or message")
+    user_query: str = Field(..., description="User query or message")
     conversation_id: str = Field(..., description="Unique ID of the ongoing conversation")
     checkpoint: Optional[str] = Field(None, description="Current checkpoint/state in the conversation flow")
-    context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional context (metadata, history, session info)")
-    individual_id: Optional[str] = Field(None, description="Reference to the individual agent instance")
+    context: str = Field(default="", description="Additional context as string")
+    user_id: str = Field(..., description="User ID for backward compatibility")
     user_profile_id: str = Field(..., description="ID of the user's profile (used to fetch complete user context)")
     agent_instance_id: str = Field(..., description="ID of the agent instance collection (tracks goals, progress, and updates)")
 
@@ -153,17 +153,37 @@ async def process_accountability_message(request: AccountabilityAgentRequest):
     try:
         start_time = time.time()
         
-        result = await accountability_process(
-            text=request.text,
+        # Initialize accountability agent
+        agent = AccountabilityAgentV2()
+        await agent.initialize()
+        
+        # Convert string context to dict if needed
+        context_dict = {}
+        if request.context:
+            try:
+                # Try to parse as JSON if it's a JSON string
+                import json
+                context_dict = json.loads(request.context) if request.context.strip().startswith('{') else {"context": request.context}
+            except:
+                # If not JSON, treat as simple string context
+                context_dict = {"context": request.context}
+        
+        result = await agent.process_message(
+            text=request.user_query,  # Use user_query instead of text
             conversation_id=request.conversation_id,
-            checkpoint=request.checkpoint,
-            context=request.context,
-            individual_id=request.individual_id,
             user_profile_id=request.user_profile_id,
-            agent_instance_id=request.agent_instance_id
+            agent_instance_id=request.agent_instance_id,
+            user_id=request.user_id,  # Use the provided user_id
+            checkpoint=request.checkpoint,
+            context=context_dict,  # Use converted context dict
+            individual_id=None  # Set to None since it's not in the request
         )
         
         processing_time = time.time() - start_time
+        
+        # Debug logging
+        _logger.info(f"Accountability agent result: {result}")
+        _logger.info(f"Processing time: {processing_time:.2f}s")
         
         return AgentResponse(
             response=result.get("response", "I'm here to help you stay accountable!"),
@@ -178,7 +198,6 @@ async def process_accountability_message(request: AccountabilityAgentRequest):
     except Exception as e:
         _logger.error(f"Error in accountability agent: {e}")
         raise HTTPException(status_code=500, detail=f"Accountability agent error: {str(e)}")
-
 @app.post("/therapy/process")
 async def process_therapy_message(request: TherapyAgentRequest):
     """Process therapy check-in agent requests"""
