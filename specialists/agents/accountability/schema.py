@@ -133,25 +133,6 @@ class DailyCheckIn(BaseModel):
     completed_at: datetime = Field(default_factory=datetime.utcnow)
     agent_response: Optional[str] = Field(None, description="Agent's encouraging response")
 
-class AccountabilitySession(BaseModel):
-    """Session state for accountability conversations"""
-    session_id: str = Field(..., description="Unique session identifier")
-    user_profile_id: str = Field(..., description="User profile ID")
-    conversation_id: str = Field(..., description="Conversation ID")
-    goal_id: Optional[str] = Field(None, description="Current goal being worked on")
-    
-    # Session state
-    current_checkpoint: CheckpointState = Field(default=CheckpointState.GREETING)
-    last_interaction: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Conversation context
-    context: Dict[str, Any] = Field(default_factory=dict)
-    pending_responses: List[str] = Field(default_factory=list)
-    
-    # Session metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(None)
-
 class ProgressStreak(BaseModel):
     """Tracks streaks and milestones for goals"""
     goal_id: str = Field(..., description="Associated goal")

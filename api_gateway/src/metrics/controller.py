@@ -20,7 +20,7 @@ class ConversationMetricsController:
         self.loneliness_agents_collection = db.loneliness_agents
         self.accountability_agents_collection = db.accountability_agents
         self.therapy_agents_collection = db.therapy_agents
-        self.social_anxiety_agents_collection = db.social_anxiety_agents
+        self.anxiety_agents_collection = db.anxiety_agents
         self.emotional_agents_collection = db.emotional_agents
 
     async def _get_goal_title(self, agent_instance_id: str, detected_agent: str, individual_id: str) -> Optional[str]:
@@ -31,7 +31,7 @@ class ConversationMetricsController:
                 'loneliness': (self.loneliness_agents_collection, 'loneliness_goals'),
                 'accountability': (self.accountability_agents_collection, 'accountability_goals'),
                 'mental_therapist': (self.therapy_agents_collection, 'therapy_goals'),
-                'anxiety': (self.social_anxiety_agents_collection, 'anxiety_goals'),
+                'anxiety': (self.anxiety_agents_collection, 'anxiety_goals'),
                 'emotional': (self.emotional_agents_collection, 'emotional_goals')
             }
             
