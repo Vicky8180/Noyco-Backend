@@ -130,14 +130,14 @@ class TherapyAgentInstance(BaseModel):
     
     # Current state
     last_check_in: Optional[str] = None  # ISO timestamp
-    last_checkpoint: str = CheckpointState.GREETING
+    last_checkpoint: str = "GREETING"
     streak_days: int = 0
     total_check_ins: int = 0
 
 
 class TherapyRequest(BaseModel):
     """Input request schema for the therapy agent"""
-    text: str
+    user_query: str
     conversation_id: str
     checkpoint: Optional[str] = None
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)

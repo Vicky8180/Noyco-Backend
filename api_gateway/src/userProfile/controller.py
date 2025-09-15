@@ -467,7 +467,7 @@ class UserProfileController:
                 detail=f"User profile with ID {user_profile_id} not found"
             )
         
-        collection_name = "social_anxiety_agents"
+        collection_name = "anxiety_agents"
         
         goal_data = {
             "title": update_data.get("title", "Anxiety Management Goal"),
@@ -719,8 +719,8 @@ class UserProfileController:
         
         user_profile_id = profiles[0]["user_profile_id"]
         
-        # Get social anxiety agent data
-        anxiety_agent = self.db.social_anxiety_agents.find_one({"user_profile_id": user_profile_id})
+        # Get anxiety agent data
+        anxiety_agent = self.db.anxiety_agents.find_one({"user_profile_id": user_profile_id})
         if not anxiety_agent:
             return []
         

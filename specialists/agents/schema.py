@@ -92,8 +92,11 @@ class UserProfile(BaseDBModel):
     loved_ones: List[LovedOne] = Field(default_factory=list)  # Fixed: removed Optional
     past_stories: List[PastStory] = Field(default_factory=list)  # Fixed: removed Optional
     personality_traits: List[str] = Field(default_factory=list)  # Fixed: removed Optional
+    preferences: Dict[str, Any] = Field(default_factory=dict)  # Added preferences field
     health_info: Dict[str, Any] = Field(default_factory=dict)  # Fixed: removed Optional, added typing
+    emotional_baseline: Optional[str] = "neutral"  # Added emotional baseline field
     is_active: bool = True
+    locale: str = "us"  # Added locale field
 
 
 # ---------- Base Goal Class ----------
@@ -128,7 +131,7 @@ class EmotionalCompanionAgent(BaseDBModel):
     user_profile_id: str
     memory_stack: List[str] = Field(default_factory=list)
     comfort_tips: List[str] = Field(default_factory=list)
-    emotional_goals: Optional[EmotionalGoal] = None
+    emotional_goals: List[EmotionalGoal] = Field(default_factory=list)
     last_interaction: Optional[datetime] = None
 
 
@@ -164,16 +167,16 @@ class AnxietyGoal(BaseGoal):
         validate_assignment = True
 
 
-class SocialAnxietyAgent(BaseDBModel):
-    agent_instance_id: str = Field(default_factory=lambda: str(uuid4()))
-    user_profile_id: str
-    anxiety_goals: List[AnxietyGoal] = Field(default_factory=list)
-    last_interaction: Optional[datetime] = None
+# SocialAnxietyAgent class removed - now using AnxietyAgent in api_gateway schema
+# This prevents duplicate class definitions and collection confusion
 
 
 # 4. Therapy / Mental Health Check-In Bot
 class TherapyGoal(BaseGoal):
     goal_id: str = Field(default_factory=generate_therapy_goal_id)
+    
+    # Therapy-specific fields
+    last_checkpoint: str = Field(default="GREETING", description="Current conversation checkpoint")
     
     class Config:
         validate_assignment = True
