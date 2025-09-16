@@ -482,7 +482,114 @@ async def orchestrate_endpoint(
                 "accountability_companion",
                 timeout=PRIMARY_TIMEOUT
             )
-    
+        elif query.detected_agent == "emotional":
+            # Convert checkpoint object to string if it exists
+            checkpoint_str = None
+            if current_checkpoint:
+                if isinstance(current_checkpoint, dict):
+                    checkpoint_str = current_checkpoint.get('name') or current_checkpoint.get('id', '')
+                else:
+                    checkpoint_str = str(current_checkpoint)
+            
+            # Convert context to dict format expected by emotional agent
+            context_dict = {}
+            if context:
+                if isinstance(context, list) and context:
+                    context_dict = context[0] if context else {}
+                elif isinstance(context, dict):
+                    context_dict = context
+                else:
+                    context_dict = {"context": str(context)}
+            
+            emotional_payload = {
+                "user_query": query.text,
+                "conversation_id": query.conversation_id,
+                "checkpoint": checkpoint_str,
+                "context": context_dict,
+                "individual_id": query.individual_id,
+                "user_profile_id": query.user_profile_id,
+                "agent_instance_id": query.agent_instance_id
+            }
+
+            primary_result = await call_service(
+                settings.EMOTIONAL_SERVICE_URL,
+                emotional_payload,
+                timing,
+                "emotional_companion",
+                timeout=PRIMARY_TIMEOUT
+            )
+        elif query.detected_agent == "mental_therapy":
+            # Convert checkpoint object to string if it exists
+            checkpoint_str = None
+            if current_checkpoint:
+                if isinstance(current_checkpoint, dict):
+                    checkpoint_str = current_checkpoint.get('name') or current_checkpoint.get('id', '')
+                else:
+                    checkpoint_str = str(current_checkpoint)
+            
+            # Convert context to dict format expected by therapy agent
+            context_dict = {}
+            if context:
+                if isinstance(context, list) and context:
+                    context_dict = context[0] if context else {}
+                elif isinstance(context, dict):
+                    context_dict = context
+                else:
+                    context_dict = {"context": str(context)}
+            
+            therapy_payload = {
+                "user_query": query.text,
+                "conversation_id": query.conversation_id,
+                "checkpoint": checkpoint_str,
+                "context": context_dict,
+                "individual_id": query.individual_id,
+                "user_profile_id": query.user_profile_id,
+                "agent_instance_id": query.agent_instance_id
+            }
+
+            primary_result = await call_service(
+                settings.THERAPY_SERVICE_URL,
+                therapy_payload,
+                timing,
+                "therapy_checkin",
+                timeout=PRIMARY_TIMEOUT
+            )
+        elif query.detected_agent == "social_anxiety":
+            # Convert checkpoint object to string if it exists
+            checkpoint_str = None
+            if current_checkpoint:
+                if isinstance(current_checkpoint, dict):
+                    checkpoint_str = current_checkpoint.get('name') or current_checkpoint.get('id', '')
+                else:
+                    checkpoint_str = str(current_checkpoint)
+            
+            # Convert context to dict format expected by anxiety agent
+            context_dict = {}
+            if context:
+                if isinstance(context, list) and context:
+                    context_dict = context[0] if context else {}
+                elif isinstance(context, dict):
+                    context_dict = context
+                else:
+                    context_dict = {"context": str(context)}
+            
+            anxiety_payload = {
+                "user_query": query.text,
+                "conversation_id": query.conversation_id,
+                "checkpoint": checkpoint_str,
+                "context": context_dict,
+                "individual_id": query.individual_id,
+                "user_profile_id": query.user_profile_id,
+                "agent_instance_id": query.agent_instance_id
+            }
+
+            primary_result = await call_service(
+                settings.ANXIETY_SERVICE_URL,
+                anxiety_payload,
+                timing,
+                "anxiety_support",
+                timeout=PRIMARY_TIMEOUT
+            )
         else:
             # Prepare primary service payload with correct data types
             primary_payload = {

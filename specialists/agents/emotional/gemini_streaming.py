@@ -10,6 +10,22 @@ import os
 import time
 from typing import Any, AsyncGenerator, Dict
 
+# Import config
+try:
+    from ..config import get_settings
+    settings = get_settings()
+except ImportError:
+    # Fallback for when config is not available
+    class FallbackSettings:
+        GEMINI_API_KEY = None
+        DEFAULT_MODEL_NAME = "gemini-1.5-flash"
+        DEFAULT_MAX_TOKENS = 150
+        DEFAULT_TEMPERATURE = 0.7
+        DEFAULT_TOP_P = 0.8
+        DEFAULT_TOP_K = 20
+        STREAM_CHUNK_SIZE = 3
+    settings = FallbackSettings()
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -23,18 +39,16 @@ except ImportError:
 class EmotionalGeminiClient:
     """Very thin async wrapper for Google Gemini with basic quota fallback."""
 
-    def __init__(self, api_key: str | None = None, model_name: str = "gemini-1.5-flash"):
-        # Only enable real client when we actually have an API key set.
-        gemini_key="AIzaSyBzGxy5W1lnV6OFsbkyAMwkIRfLpJK5BWw"
-        env_key = (
+    def __init__(self, api_key: str | None = None, model_name: str | None = None):
+        # Use config values instead of hardcoded ones
+        self.api_key = (
             api_key
-            or gemini_key
+            or settings.GEMINI_API_KEY
             or os.getenv("GOOGLE_API_KEY")
             or os.getenv("GEMINI_API_KEY")
             or os.getenv("GENAI_API_KEY")
         )
-        self.api_key = env_key
-        self.model_name = model_name
+        self.model_name = model_name or settings.DEFAULT_MODEL_NAME
         self.model = None
         self._init_client()
 
@@ -150,11 +164,16 @@ class EmotionalGeminiClient:
     async def stream_generate_content(
         self,
         prompt: str,
-        max_tokens: int = 150,
-        temperature: float = 0.7,
-        chunk_size: int = 3,
+        max_tokens: int = None,
+        temperature: float = None,
+        chunk_size: int = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Enhanced emotional streaming with comprehensive error handling"""
+        # Use config defaults if parameters not provided
+        max_tokens = max_tokens or settings.DEFAULT_MAX_TOKENS
+        temperature = temperature or settings.DEFAULT_TEMPERATURE
+        chunk_size = chunk_size or settings.STREAM_CHUNK_SIZE
+        
         if not self.model:
             reason = "No API key" if not self.api_key else "Library not available" if not GENAI_LIB else "Model initialization failed"
             logger.warning(f"Using emotional fallback streaming response - Reason: {reason}")
@@ -177,8 +196,8 @@ class EmotionalGeminiClient:
                     generation_config=genai.types.GenerationConfig(
                         max_output_tokens=max_tokens,
                         temperature=temperature,
-                        top_p=0.8,
-                        top_k=20,
+                        top_p=settings.DEFAULT_TOP_P,
+                        top_k=settings.DEFAULT_TOP_K,
                     ),
                 ),
             )
@@ -222,5 +241,5 @@ class EmotionalGeminiClient:
 
 # convenience ---------------------------------------------------------------
 
-def get_streaming_client(model_name: str = "gemini-1.5-flash") -> EmotionalGeminiClient:
+def get_streaming_client(model_name: str = None) -> EmotionalGeminiClient:
     return EmotionalGeminiClient(model_name=model_name)

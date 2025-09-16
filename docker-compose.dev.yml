@@ -1,0 +1,212 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: conversationalengine-dev-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-dev_password}
+      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-conversionalEngine_dev}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_dev_data:/data/db
+      - mongodb_dev_config:/data/configdb
+    networks:
+      - conversationalengine-dev-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: conversationalengine-dev-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dev_redis_password}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - conversationalengine-dev-network
+
+  # API Gateway Service
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/Dockerfile
+    container_name: conversationalengine-dev-api-gateway
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-dev_password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine_dev}?authSource=admin
+      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine_dev}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/keys/google-cloudvision-credentials.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./keys:/app/keys:ro
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "api_gateway.main:socket_app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Memory Service
+  memory:
+    build:
+      context: .
+      dockerfile: memory/Dockerfile
+    container_name: conversationalengine-dev-memory
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-dev_password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine_dev}?authSource=admin
+      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine_dev}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-west1-gcp}
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "memory.main:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
+
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    container_name: conversationalengine-dev-orchestrator
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - MEMORY_URL=http://memory:8010
+      - CHECKPOINT_URL=http://checkpoint:8003
+      - PRIMARY_SERVICE_URL=http://primary-specialist:8004/process
+      - CHECKLIST_SERVICE_URL=http://checklist-specialist:8007/process
+      - LONELINESS_SERVICE_URL=http://agents-specialist:8015/loneliness/process
+      - ACCOUNTABILITY_SERVICE_URL=http://agents-specialist:8015/accountability/process
+      - THERAPY_SERVICE_URL=http://agents-specialist:8015/therapy/process
+      - EMOTIONAL_SERVICE_URL=http://agents-specialist:8015/emotional/process
+      - ANXIETY_SERVICE_URL=http://agents-specialist:8015/anxiety/process
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    depends_on:
+      - memory
+      - checkpoint
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "orchestrator.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+
+  # Checkpoint Service
+  checkpoint:
+    build:
+      context: .
+      dockerfile: checkpoint/Dockerfile
+    container_name: conversationalengine-dev-checkpoint
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./keys:/app/keys:ro
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "checkpoint.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+
+  # Primary Specialist Service
+  primary-specialist:
+    build:
+      context: .
+      dockerfile: specialists/primary/Dockerfile
+    container_name: conversationalengine-dev-primary-specialist
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./keys:/app/keys:ro
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "specialists.primary.main:app", "--host", "0.0.0.0", "--port", "8004", "--reload"]
+
+  # Checklist Specialist Service
+  checklist-specialist:
+    build:
+      context: .
+      dockerfile: specialists/checklist/Dockerfile
+    container_name: conversationalengine-dev-checklist-specialist
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./keys:/app/keys:ro
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "specialists.checklist.main:app", "--host", "0.0.0.0", "--port", "8007", "--reload"]
+
+  # Agents Specialist Service
+  agents-specialist:
+    build:
+      context: .
+      dockerfile: specialists/agents/Dockerfile
+    container_name: conversationalengine-dev-agents-specialist
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-dev_password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine_dev}?authSource=admin
+      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine_dev}
+    ports:
+      - "8015:8015"
+    volumes:
+      - ./keys:/app/keys:ro
+      - ./logs:/app/logs
+      - .:/app  # Mount entire directory for development
+    depends_on:
+      - mongodb
+    networks:
+      - conversationalengine-dev-network
+    command: ["python", "-m", "uvicorn", "specialists.agents.main:app", "--host", "0.0.0.0", "--port", "8015", "--reload"]
+
+networks:
+  conversationalengine-dev-network:
+    driver: bridge
+
+volumes:
+  mongodb_dev_data:
+    driver: local
+  mongodb_dev_config:
+    driver: local
+  redis_dev_data:
+    driver: local

@@ -23,6 +23,8 @@ class OrchestratorSettings(BaseSettings):
     LONELINESS_SERVICE_URL: str = "http://localhost:8015/loneliness/process"
     ACCOUNTABILITY_SERVICE_URL: str = "http://localhost:8015/accountability/process"
     THERAPY_SERVICE_URL: str = "http://localhost:8015/therapy/process"
+    EMOTIONAL_SERVICE_URL: str = "http://localhost:8015/emotional/process"
+    ANXIETY_SERVICE_URL: str = "http://localhost:8015/anxiety/process"
     
     # Orchestrator Service Configuration
     ORCHESTRATOR_HOST: str = "0.0.0.0"

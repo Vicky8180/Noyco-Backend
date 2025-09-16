@@ -23,6 +23,14 @@ class AgentsSettings(BaseSettings):
     
     # Engine choices
     LLM_ENGINE: str = "gemini-2.0-flash"
+    DEFAULT_MODEL_NAME: str = "gemini-2.0-flash"
+    
+    # LLM Configuration
+    DEFAULT_MAX_TOKENS: int = 150
+    DEFAULT_TEMPERATURE: float = 0.7
+    DEFAULT_TOP_P: float = 0.8
+    DEFAULT_TOP_K: int = 20
+    STREAM_CHUNK_SIZE: int = 3
     
     # Service Configuration
     SERVICE_NAME: str = "agents"
@@ -34,6 +42,8 @@ class AgentsSettings(BaseSettings):
     LONELINESS_SERVICE_URL: Optional[str] = "http://localhost:8015/loneliness/process"
     ACCOUNTABILITY_SERVICE_URL: Optional[str] = "http://localhost:8015/accountability/process"
     THERAPY_SERVICE_URL: Optional[str] = "http://localhost:8015/therapy/process"
+    EMOTIONAL_SERVICE_URL: Optional[str] = "http://localhost:8015/emotional/process"
+    ANXIETY_SERVICE_URL: Optional[str] = "http://localhost:8015/anxiety/process"
     
     class Config:
         env_file = ".env"
