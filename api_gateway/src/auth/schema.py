@@ -12,11 +12,11 @@ class PlanType(str, Enum):
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    HOSPITAL = "hospital"
+    # HOSPITAL = "hospital"
     ASSISTANT = "assistant"
     INDIVIDUAL = "individual"
 class RegistrationType(str, Enum):
-    ORGANIZATION = "organization"
+    # ORGANIZATION = "organization"
     INDIVIDUAL = "individual"
 class HospitalStatus(str, Enum):
     ACTIVE = "active"
@@ -146,16 +146,16 @@ class TokenResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
 
-class HospitalResponse(BaseModel):
-    id: str
-    hospital_name: str
-    email: EmailStr
-    phone: Optional[str]
-    website_link: Optional[HttpUrl]
-    plan: PlanType
-    status: HospitalStatus
-    created_at: datetime
-    updated_at: datetime
+# class HospitalResponse(BaseModel):
+#     id: str
+#     hospital_name: str
+#     email: EmailStr
+#     phone: Optional[str]
+#     website_link: Optional[HttpUrl]
+#     plan: PlanType
+#     status: HospitalStatus
+#     created_at: datetime
+#     updated_at: datetime
 
 class IndividualResponse(BaseModel):
     id: str
@@ -193,18 +193,18 @@ class AssistantResponse(BaseModel):
 
 
 # ----- Database Models -----
-class Hospital(BaseModel):
-    id: str
-    name: str
-    email: EmailStr
-    password_hash: str
-    phone: Optional[str]
-    website_link: Optional[HttpUrl]
-    plan: Optional[PlanType] = None
-    status: HospitalStatus = HospitalStatus.ACTIVE
-    onboarding_completed: bool = False  # Indicates if onboarding flow is finished
-    created_at: datetime
-    updated_at: datetime
+# class Hospital(BaseModel):
+#     id: str
+#     name: str
+#     email: EmailStr
+#     password_hash: str
+#     phone: Optional[str]
+#     website_link: Optional[HttpUrl]
+#     plan: Optional[PlanType] = None
+#     status: HospitalStatus = HospitalStatus.ACTIVE
+#     onboarding_completed: bool = False  # Indicates if onboarding flow is finished
+#     created_at: datetime
+#     updated_at: datetime
 
 class Individual(BaseModel):
     id: str

@@ -3,13 +3,12 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from typing import Any
-from datetime import datetime
 import os
 
 # Define the roles if needed (basic setup)
 class UserRole:
     ADMIN = "admin"
-    HOSPITAL_ADMIN = "hospital_admin"
+    # HOSPITAL_ADMIN = "hospital_admin"
     DOCTOR = "doctor"
     NURSE = "nurse"
     STAFF = "staff"

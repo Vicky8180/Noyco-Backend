@@ -1,10 +1,8 @@
-
-
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from .jwt_auth import JWTAuthController
-from api_gateway.src.auth.schema import UserRole
+from ..src.auth.schema import UserRole
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     """Middleware for JWT authentication with httpOnly cookies"""
@@ -16,9 +14,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # Routes that don't require authentication (use prefix matching)
         self.public_routes = {
             "/",
-            "/api/call",
-            "/api/calls/active",
-            "/auth/hospital/register",
+            # "/api/call",
+            # "/api/calls/active",
+            # "/auth/hospital/register",
             "/auth/individual/register",
             "/auth/login",
             "/auth/me",
@@ -35,31 +33,31 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             "/marketing/contact",
             "/marketing/privacy",
             "/static",
-            "/patients",
-            "/phone/generate",
-            "/phone/config/{hospital_id}",
-            "/phone/call",
-            "/phone/voice",
-            "/phone/forward-webhook",
-            "/phone/status",
-            "/phone/stream",
-            "/phone/gather-response",  # Twilio gather endpoint without query params
-            "/phone/orchestrator-response",
-            "/schedule/create",
-            "/schedule/stats",
+            # "/patients",
+            # "/phone/generate",
+            # "/phone/config/{hospital_id}",
+            # "/phone/call",
+            # "/phone/voice",
+            # "/phone/forward-webhook",
+            # "/phone/status",
+            # "/phone/stream",
+            # "/phone/gather-response",  # Twilio gather endpoint without query params
+            # "/phone/orchestrator-response",
+            # "/schedule/create",
+            # "/schedule/stats",
             "/billing/plans",
             "/orchestrate",
-            "/api/patients",
+            # "/api/patients",
             "/stripe/webhook",  # allow Stripe to POST webhooks without auth
             "/voice-widget",  # allow voice widget endpoints (embed/js/iframe/session)
             "/.well-known",  # chrome devtools fetches
             "/individual/mediscan/patients",  # allow fetching patients without auth
-            "/api/fhir/upload-csv",
+            # "/api/fhir/upload-csv",
             "/auth/otp" , # ← add this to allow all OTP endpoints without auth
             "/chat",
             "/initial/chat",
             "/user-profile",  # Allow all user profile endpoints without authentication
-            "/phone/test-verification",
+            # "/phone/test-verification",
             "/user-profile/goals",  # Allow all goal endpoints without authentication
             "/auth/password/reset/request",
             "/auth/password/reset/confirm",
@@ -75,7 +73,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             "/billing/plan/select",
             "/billing/services/select",
             "/individual/mediscan/ocr",
-                  "/phone/config"
+                #   "/phone/config"
             # "/billing/plan/current",  # Removed CSRF requirement for GET endpoint
         }
 
@@ -263,8 +261,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if user.role == UserRole.ADMIN:
             return True
 
-        if user.role == UserRole.HOSPITAL:
-            return True
+        # if user.role == UserRole.HOSPITAL:
+        #     return True
 
         if user.role == UserRole.INDIVIDUAL:
             # Allow individuals to access billing and mediscan services
@@ -272,15 +270,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                return True
 
         if service == "billing":
-            return user.role in [UserRole.ADMIN, UserRole.HOSPITAL, UserRole.INDIVIDUAL]
+            return user.role in [UserRole.ADMIN, UserRole.INDIVIDUAL]
 
         if service in ["orchestrator", "detector", "checkpoint", "memory"]:
-            return user.role in [UserRole.ADMIN, UserRole.HOSPITAL, UserRole.ASSISTANT]
+            return user.role in [UserRole.ADMIN, UserRole.ASSISTANT]
             
         if service == "mediscan":
             return user.role == UserRole.INDIVIDUAL
 
         if service == "stripe":
-            return user.role in [UserRole.ADMIN, UserRole.HOSPITAL, UserRole.INDIVIDUAL]
+            return user.role in [UserRole.ADMIN, UserRole.INDIVIDUAL]
 
         return False

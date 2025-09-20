@@ -1,5 +1,5 @@
 from datetime import datetime
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 
 db = get_database()
 COLL = db.stripe_audit

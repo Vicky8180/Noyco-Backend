@@ -2,7 +2,7 @@
 # api_gateway/src/auth/routes.py
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Header, Cookie
 from .controller import AuthController
-from api_gateway.middlewares.jwt_auth import JWTAuthController
+from ...middlewares.jwt_auth import JWTAuthController
 from .schema import *
 from datetime import datetime, timedelta
 from typing import List

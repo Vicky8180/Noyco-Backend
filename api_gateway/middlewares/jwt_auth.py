@@ -7,9 +7,18 @@ from jose import jwt, JWTError
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
-from api_gateway.src.auth.schema import UserRole, JWTClaims, PlanType
-from api_gateway.database.db import get_database
-from api_gateway.config import get_settings
+
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.dirname(path.abspath(__file__)))))
+    from api_gateway.src.auth.schema import UserRole, JWTClaims, PlanType
+    from api_gateway.database.db import get_database
+    from api_gateway.config import get_settings
+else:
+    from ..src.auth.schema import UserRole, JWTClaims, PlanType
+    from ..database.db import get_database
+    from ..config import get_settings
 
 class JWTAuthController:
     """Comprehensive JWT authentication controller for handling tokens and cookies"""

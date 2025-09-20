@@ -6,12 +6,14 @@ import uuid
 
 from .schema import (
     PlanType, ServiceType, PlanStatus, UserRole, ModelTier,
-    PlanSelectionRequest, ServiceSelectionRequest,
-    PlanConfigResponse, AvailableServicesResponse, HospitalPlanResponse,
+    PlanSelectionRequest, 
+    # ServiceSelectionRequest,
+    PlanConfigResponse, AvailableServicesResponse, 
+    # HospitalPlanResponse,
     PlanUpdateHistory, PlanDetailResponse, AvailablePlansResponse,
     IndividualPlanResponse
 )
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 from ...utils.helperFunctions import generate_unique_id
 
 # REPLACE existing PLAN_CONFIGS and PLAN_DETAILS definitions with role-specific dictionaries to avoid key collisions and allow LITE/PRO for both roles
@@ -144,13 +146,13 @@ PLAN_DETAILS_INDIVIDUAL = {
 
 # Helper that returns correct config/detail dict based on user role
 ROLE_CONFIG_MAP = {
-    UserRole.HOSPITAL: PLAN_CONFIGS_HOSPITAL,
+    # UserRole.HOSPITAL: PLAN_CONFIGS_HOSPITAL,
     UserRole.ADMIN: PLAN_CONFIGS_HOSPITAL,  # admins manage hospitals too
     UserRole.INDIVIDUAL: PLAN_CONFIGS_INDIVIDUAL,
 }
 
 ROLE_DETAILS_MAP = {
-    UserRole.HOSPITAL: PLAN_DETAILS_HOSPITAL,
+    # UserRole.HOSPITAL: PLAN_DETAILS_HOSPITAL,
     UserRole.ADMIN: PLAN_DETAILS_HOSPITAL,
     UserRole.INDIVIDUAL: PLAN_DETAILS_INDIVIDUAL,
 }
@@ -413,287 +415,287 @@ class BillingController:
                 detail=f"Error retrieving plan configurations: {str(e)}"
             )
 
-    async def get_available_services(self, user_id: str = None, role_entity_id: str = None) -> AvailableServicesResponse:
-        """Get available services based on plan type"""
-        try:
-            # Get services from hospital or individual plan
-            services = [
-                {
-                    "id": "privacy", 
-                    "name": "Privacy Protection", 
-                    "description": "Ensures sensitive patient data is properly anonymized and protected",
-                    "is_default": True
-                },
-                {
-                    "id": "human_escalation", 
-                    "name": "Human Escalation", 
-                    "description": "Automatically escalates complex cases to human specialists when needed",
-                    "is_default": True
-                },
-                {
-                    "id": "checklist", 
-                    "name": "Clinical Checklists", 
-                    "description": "Generates dynamic checklists based on clinical guidelines",
-                    "is_default": True
-                },
-                {
-                    "id": "medication", 
-                    "name": "Medication Management", 
-                    "description": "Provides advanced medication recommendations and checks for contraindications"
-                },
-                {
-                    "id": "nutrition", 
-                    "name": "Nutrition Analysis", 
-                    "description": "Offers detailed nutrition guidance and dietary recommendations"
-                }
-            ]
+    # async def get_available_services(self, user_id: str = None, role_entity_id: str = None) -> AvailableServicesResponse:
+    #     """Get available services based on plan type"""
+    #     try:
+    #         # Get services from hospital or individual plan
+    #         services = [
+    #             {
+    #                 "id": "privacy", 
+    #                 "name": "Privacy Protection", 
+    #                 "description": "Ensures sensitive patient data is properly anonymized and protected",
+    #                 "is_default": True
+    #             },
+    #             {
+    #                 "id": "human_escalation", 
+    #                 "name": "Human Escalation", 
+    #                 "description": "Automatically escalates complex cases to human specialists when needed",
+    #                 "is_default": True
+    #             },
+    #             {
+    #                 "id": "checklist", 
+    #                 "name": "Clinical Checklists", 
+    #                 "description": "Generates dynamic checklists based on clinical guidelines",
+    #                 "is_default": True
+    #             },
+    #             {
+    #                 "id": "medication", 
+    #                 "name": "Medication Management", 
+    #                 "description": "Provides advanced medication recommendations and checks for contraindications"
+    #             },
+    #             {
+    #                 "id": "nutrition", 
+    #                 "name": "Nutrition Analysis", 
+    #                 "description": "Offers detailed nutrition guidance and dietary recommendations"
+    #             }
+    #         ]
 
-            # If hospital or individual plan exists, check which services are available
-            if role_entity_id:
-                hospital_plan = self.db.plans.find_one({"hospital_id": role_entity_id})
-                if hospital_plan:
-                    plan_type = hospital_plan.get("plan_type")
-                    selected_services = hospital_plan.get("selected_services", [])
+    #         # If hospital or individual plan exists, check which services are available
+    #         if role_entity_id:
+    #             hospital_plan = self.db.plans.find_one({"hospital_id": role_entity_id})
+    #             if hospital_plan:
+    #                 plan_type = hospital_plan.get("plan_type")
+    #                 selected_services = hospital_plan.get("selected_services", [])
                     
-                    # Mark services with appropriate flags
-                    for service in services:
-                        # Mark if service is selected
-                        service["is_selected"] = service["id"] in selected_services
+    #                 # Mark services with appropriate flags
+    #                 for service in services:
+    #                     # Mark if service is selected
+    #                     service["is_selected"] = service["id"] in selected_services
                         
-                        # Default services are always selected and available
-                        if service.get("is_default", False):
-                            service["is_available"] = True
-                        # For lite plan, handle optional services
-                        elif plan_type == PlanType.LITE.value:
-                            # Optional services in lite plan
-                            if service["id"] in ["medication", "nutrition"]:
-                                # If this one is selected, it's available
-                                if service["id"] in selected_services:
-                                    service["is_available"] = True
-                                # If another optional is selected, this one is not available
-                                elif any(s in selected_services for s in ["medication", "nutrition"] if s != service["id"]):
-                                    service["is_available"] = False
-                                # If no optional is selected yet, it's available
-                                else:
-                                    service["is_available"] = True
-                        # For pro plan or other types, all services are available
-                        else:
-                            service["is_available"] = True
-                else:
-                    # No plan found, mark defaults as selected and all as available
-                    for service in services:
-                        service["is_selected"] = service.get("is_default", False)
-                        service["is_available"] = True
-            else:
-                # No hospital/user ID provided, mark defaults as selected and all as available
-                for service in services:
-                    service["is_selected"] = service.get("is_default", False)
-                    service["is_available"] = True
+    #                     # Default services are always selected and available
+    #                     if service.get("is_default", False):
+    #                         service["is_available"] = True
+    #                     # For lite plan, handle optional services
+    #                     elif plan_type == PlanType.LITE.value:
+    #                         # Optional services in lite plan
+    #                         if service["id"] in ["medication", "nutrition"]:
+    #                             # If this one is selected, it's available
+    #                             if service["id"] in selected_services:
+    #                                 service["is_available"] = True
+    #                             # If another optional is selected, this one is not available
+    #                             elif any(s in selected_services for s in ["medication", "nutrition"] if s != service["id"]):
+    #                                 service["is_available"] = False
+    #                             # If no optional is selected yet, it's available
+    #                             else:
+    #                                 service["is_available"] = True
+    #                     # For pro plan or other types, all services are available
+    #                     else:
+    #                         service["is_available"] = True
+    #             else:
+    #                 # No plan found, mark defaults as selected and all as available
+    #                 for service in services:
+    #                     service["is_selected"] = service.get("is_default", False)
+    #                     service["is_available"] = True
+    #         else:
+    #             # No hospital/user ID provided, mark defaults as selected and all as available
+    #             for service in services:
+    #                 service["is_selected"] = service.get("is_default", False)
+    #                 service["is_available"] = True
 
-            return AvailableServicesResponse(services=services)
+    #         return AvailableServicesResponse(services=services)
 
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error retrieving available services: {str(e)}"
-            )
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Error retrieving available services: {str(e)}"
+    #         )
 
-    async def select_plan(self, request: PlanSelectionRequest, user_id: str) -> HospitalPlanResponse:
-        """Select and create a plan for a hospital"""
-        try:
-            # Verify hospital exists
-            hospital = self.db.hospitals.find_one({
-                "id": request.id
-            })
+    # async def select_plan(self, request: PlanSelectionRequest, user_id: str) -> HospitalPlanResponse:
+    #     """Select and create a plan for a hospital"""
+    #     try:
+    #         # Verify hospital exists
+    #         hospital = self.db.hospitals.find_one({
+    #             "id": request.id
+    #         })
 
-            if not hospital:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital with provided unique identity not found"
-                )
+    #         if not hospital:
+    #             raise HTTPException(
+    #                 status_code=status.HTTP_404_NOT_FOUND,
+    #                 detail="Hospital with provided unique identity not found"
+    #             )
 
-            # Get plan configuration
-            if request.plan_type not in PLAN_CONFIGS_HOSPITAL:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid plan type"
-                )
+    #         # Get plan configuration
+    #         if request.plan_type not in PLAN_CONFIGS_HOSPITAL:
+    #             raise HTTPException(
+    #                 status_code=status.HTTP_400_BAD_REQUEST,
+    #                 detail="Invalid plan type"
+    #             )
 
-            plan_config = PLAN_CONFIGS_HOSPITAL[request.plan_type]  # type: ignore
+    #         plan_config = PLAN_CONFIGS_HOSPITAL[request.plan_type]  # type: ignore
 
-            # Check if plan already exists
-            existing_plan = self.db.plans.find_one({
-                "hospital_id": hospital["id"]
-            })
+    #         # Check if plan already exists
+    #         existing_plan = self.db.plans.find_one({
+    #             "hospital_id": hospital["id"]
+    #         })
 
-            current_time = datetime.utcnow()
+    #         current_time = datetime.utcnow()
             
-            # Set default selected services
-            default_services = ["privacy", "human_escalation", "checklist"]
+    #         # Set default selected services
+    #         default_services = ["privacy", "human_escalation", "checklist"]
             
-            plan_data = {
-                "hospital_id": hospital["id"],
-                "plan_type": request.plan_type.value,
-                "status": PlanStatus.ACTIVE.value,
-                "selected_services": default_services,
-                "created_at": current_time,
-                "updated_at": current_time,
-                **plan_config
-            }
+    #         plan_data = {
+    #             "hospital_id": hospital["id"],
+    #             "plan_type": request.plan_type.value,
+    #             "status": PlanStatus.ACTIVE.value,
+    #             "selected_services": default_services,
+    #             "created_at": current_time,
+    #             "updated_at": current_time,
+    #             **plan_config
+    #         }
 
-            if existing_plan:
-                # Update existing plan
-                old_plan_type = existing_plan.get("plan_type")
+    #         if existing_plan:
+    #             # Update existing plan
+    #             old_plan_type = existing_plan.get("plan_type")
 
-                # Create history record if plan type changed
-                if old_plan_type != request.plan_type.value:
-                    await self._create_plan_history(
-                        hospital_id=hospital["id"],
-                        previous_plan=old_plan_type,
-                        new_plan=request.plan_type.value,
-                        changed_by=user_id,
-                        reason="Plan type change"
-                    )
+    #             # Create history record if plan type changed
+    #             if old_plan_type != request.plan_type.value:
+    #                 await self._create_plan_history(
+    #                     hospital_id=hospital["id"],
+    #                     previous_plan=old_plan_type,
+    #                     new_plan=request.plan_type.value,
+    #                     changed_by=user_id,
+    #                     reason="Plan type change"
+    #                 )
 
-                # If there were previously selected optional services, carry them forward if possible
-                if "selected_services" in existing_plan:
-                    current_selected = existing_plan["selected_services"]
+    #             # If there were previously selected optional services, carry them forward if possible
+    #             if "selected_services" in existing_plan:
+    #                 current_selected = existing_plan["selected_services"]
                     
-                    # Keep optional services if compatible with new plan
-                    optional_services = [s for s in current_selected if s in ["medication", "nutrition"]]
+    #                 # Keep optional services if compatible with new plan
+    #                 optional_services = [s for s in current_selected if s in ["medication", "nutrition"]]
                     
-                    # For lite plan, only keep one optional service
-                    if request.plan_type == PlanType.LITE and len(optional_services) > 1:
-                        optional_services = optional_services[:1]  # Keep only the first one
+    #                 # For lite plan, only keep one optional service
+    #                 if request.plan_type == PlanType.LITE and len(optional_services) > 1:
+    #                     optional_services = optional_services[:1]  # Keep only the first one
                     
-                    # Combine default services with compatible optional services
-                    plan_data["selected_services"] = list(set(default_services + optional_services))
+    #                 # Combine default services with compatible optional services
+    #                 plan_data["selected_services"] = list(set(default_services + optional_services))
 
-                # Update plan
-                self.db.plans.update_one(
-                    {"id": existing_plan["id"]},
-                    {"$set": plan_data}
-                )
-                plan_data["id"] = existing_plan["id"]
-            else:
-                # Create new plan
-                plan_data["id"] = generate_unique_id("plan")
-                self.db.plans.insert_one(plan_data)
+    #             # Update plan
+    #             self.db.plans.update_one(
+    #                 {"id": existing_plan["id"]},
+    #                 {"$set": plan_data}
+    #             )
+    #             plan_data["id"] = existing_plan["id"]
+    #         else:
+    #             # Create new plan
+    #             plan_data["id"] = generate_unique_id("plan")
+    #             self.db.plans.insert_one(plan_data)
 
-            # Update hospital's plan reference
-            self.db.hospitals.update_one(
-                {"id": hospital["id"]},
-                {"$set": {
-                    "plan": request.plan_type.value,
-                    "updated_at": current_time
-                }}
-            )
+    #         # Update hospital's plan reference
+    #         self.db.hospitals.update_one(
+    #             {"id": hospital["id"]},
+    #             {"$set": {
+    #                 "plan": request.plan_type.value,
+    #                 "updated_at": current_time
+    #             }}
+    #         )
 
-            return HospitalPlanResponse(**plan_data)
+    #         return HospitalPlanResponse(**plan_data)
 
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error selecting plan: {str(e)}"
-            )
+    #     except HTTPException:
+    #         raise
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Error selecting plan: {str(e)}"
+    #         )
 
-    async def select_services(self, request: ServiceSelectionRequest, user_id: str) -> HospitalPlanResponse:
-        """Select services for a hospital's plan"""
-        try:
-            # Get hospital plan
-            # First try to locate by unique identity
-            hospital_plan = self.db.plans.find_one({
-                "hospital_id": request.hospital_id
-            })
+    # async def select_services(self, request: ServiceSelectionRequest, user_id: str) -> HospitalPlanResponse:
+    #     """Select services for a hospital's plan"""
+    #     try:
+    #         # Get hospital plan
+    #         # First try to locate by unique identity
+    #         hospital_plan = self.db.plans.find_one({
+    #             "hospital_id": request.hospital_id
+    #         })
 
-            # No plan found by hospital_id
-            # (legacy hospital_unique_identity support removed)
+    #         # No plan found by hospital_id
+    #         # (legacy hospital_unique_identity support removed)
 
-            if not hospital_plan:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital plan not found. Please select a plan first."
-                )
+    #         if not hospital_plan:
+    #             raise HTTPException(
+    #                 status_code=status.HTTP_404_NOT_FOUND,
+    #                 detail="Hospital plan not found. Please select a plan first."
+    #             )
 
-            plan_type = hospital_plan.get("plan_type")
+    #         plan_type = hospital_plan.get("plan_type")
             
-            # Make sure default services are always included
-            default_services = ["privacy", "human_escalation", "checklist"]
-            requested_services = list(set(request.services + default_services))
+    #         # Make sure default services are always included
+    #         default_services = ["privacy", "human_escalation", "checklist"]
+    #         requested_services = list(set(request.services + default_services))
             
-            # Apply plan-specific restrictions
-            if plan_type == PlanType.LITE.value:
-                # For Lite plan, only allow one optional service
-                optional_services = [s for s in requested_services if s in ["medication", "nutrition"]]
-                if len(optional_services) > 1:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Lite plan can only select one optional service (medication or nutrition)"
-                    )
+    #         # Apply plan-specific restrictions
+    #         if plan_type == PlanType.LITE.value:
+    #             # For Lite plan, only allow one optional service
+    #             optional_services = [s for s in requested_services if s in ["medication", "nutrition"]]
+    #             if len(optional_services) > 1:
+    #                 raise HTTPException(
+    #                     status_code=status.HTTP_400_BAD_REQUEST,
+    #                     detail="Lite plan can only select one optional service (medication or nutrition)"
+    #                 )
                     
-            # Update selected services
-            current_time = datetime.utcnow()
-            self.db.plans.update_one(
-                {"id": hospital_plan["id"]},
-                {"$set": {
-                    "selected_services": requested_services,
-                    "updated_at": current_time
-                }}
-            )
+    #         # Update selected services
+    #         current_time = datetime.utcnow()
+    #         self.db.plans.update_one(
+    #             {"id": hospital_plan["id"]},
+    #             {"$set": {
+    #                 "selected_services": requested_services,
+    #                 "updated_at": current_time
+    #             }}
+    #         )
 
-            # Get updated plan
-            updated_plan = self.db.plans.find_one({
-                "id": hospital_plan["id"]
-            })
+    #         # Get updated plan
+    #         updated_plan = self.db.plans.find_one({
+    #             "id": hospital_plan["id"]
+    #         })
 
-            return HospitalPlanResponse(**updated_plan)
+    #         return HospitalPlanResponse(**updated_plan)
 
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error selecting services: {str(e)}"
-            )
+    #     except HTTPException:
+    #         raise
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Error selecting services: {str(e)}"
+    #         )
 
-    async def get_hospital_plan(self, hospital_id: str) -> HospitalPlanResponse:
-        """Get hospital plan details by hospital_id"""
-        try:
-            # Find hospital plan by hospital_id
-            hospital_plan = self.db.plans.find_one({
-                "hospital_id": hospital_id
-            })
+    # async def get_hospital_plan(self, hospital_id: str) -> HospitalPlanResponse:
+    #     """Get hospital plan details by hospital_id"""
+    #     try:
+    #         # Find hospital plan by hospital_id
+    #         hospital_plan = self.db.plans.find_one({
+    #             "hospital_id": hospital_id
+    #         })
 
-            # No legacy hospital_unique_identity fallback
+    #         # No legacy hospital_unique_identity fallback
 
-            if not hospital_plan:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital plan not found"
-                )
+    #         if not hospital_plan:
+    #             raise HTTPException(
+    #                 status_code=status.HTTP_404_NOT_FOUND,
+    #                 detail="Hospital plan not found"
+    #             )
 
-            return HospitalPlanResponse(**hospital_plan)
+    #         return HospitalPlanResponse(**hospital_plan)
 
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error retrieving hospital plan: {str(e)}"
-            )
+    #     except HTTPException:
+    #         raise
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Error retrieving hospital plan: {str(e)}"
+    #         )
 
-    async def get_hospital_by_id(self, hospital_id: str) -> Optional[Dict[str, Any]]:
-        """Get hospital information by ID"""
-        try:
-            hospital = self.db.hospitals.find_one({"id": hospital_id})
-            return hospital
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error retrieving hospital information: {str(e)}"
-            )
+    # async def get_hospital_by_id(self, hospital_id: str) -> Optional[Dict[str, Any]]:
+    #     """Get hospital information by ID"""
+    #     try:
+    #         hospital = self.db.hospitals.find_one({"id": hospital_id})
+    #         return hospital
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Error retrieving hospital information: {str(e)}"
+    #         )
 
     async def get_assistant_by_id(self, assistant_id: str) -> Optional[Dict[str, Any]]:
         """Get assistant information by ID"""
@@ -706,19 +708,19 @@ class BillingController:
                 detail=f"Error retrieving assistant information: {str(e)}"
             )
 
-    async def _create_plan_history(self, hospital_id: str, previous_plan: str, new_plan: str, changed_by: str, reason: str = None):
-        """Create plan update history record"""
-        try:
-            history_data = {
-                "id": generate_unique_id("history"),
-                "hospital_id": hospital_id,
-                "previous_plan": previous_plan,
-                "new_plan": new_plan,
-                "changed_by": changed_by,
-                "reason": reason,
-                "created_at": datetime.utcnow()
-            }
-            self.db.plan_update_history.insert_one(history_data)
-        except Exception:
-            # Don't fail the main operation if history logging fails
-            pass
+    # async def _create_plan_history(self, hospital_id: str, previous_plan: str, new_plan: str, changed_by: str, reason: str = None):
+    #     """Create plan update history record"""
+    #     try:
+    #         history_data = {
+    #             "id": generate_unique_id("history"),
+    #             "hospital_id": hospital_id,
+    #             "previous_plan": previous_plan,
+    #             "new_plan": new_plan,
+    #             "changed_by": changed_by,
+    #             "reason": reason,
+    #             "created_at": datetime.utcnow()
+    #         }
+    #         self.db.plan_update_history.insert_one(history_data)
+    #     except Exception:
+    #         # Don't fail the main operation if history logging fails
+    #         pass

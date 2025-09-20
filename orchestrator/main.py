@@ -1,5 +1,3 @@
-
-
 """
 Simplified Main entry point for the Conversation Orchestrator service.
 This module sets up the FastAPI application and defines the main orchestration endpoint.
@@ -13,25 +11,45 @@ from datetime import datetime
 import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Response, BackgroundTasks, status, Depends, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-from common.models import Task
-from .auth.validateAPI import get_current_user, JWTClaims
-import websockets
-from urllib.parse import urlparse
+# from pydantic import BaseModel
+# from .auth.validateAPI import get_current_user, JWTClaims
+# import websockets
+# from urllib.parse import urlparse
 
 # Import local modules - Only keeping what we need
-from orchestrator.models import OrchestratorQuery, OrchestratorResponse
-from orchestrator.timing import TimingMetrics
-from orchestrator.config import get_settings
-from orchestrator.services import (
-    call_checklist_service,
-    call_service, 
-    http_client, 
-    ensure_http_client
-)
-from orchestrator.utils import get_conversation_state
-from orchestrator.state_manager import cache_manager
-import orchestrator.services
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+    from orchestrator.models import OrchestratorQuery, OrchestratorResponse
+    from orchestrator.timing import TimingMetrics
+    from orchestrator.config import get_settings
+    from orchestrator.services import (
+        call_checklist_service,
+        call_service, 
+        http_client, 
+        ensure_http_client
+    )
+    from orchestrator.utils import get_conversation_state
+    from orchestrator.state_manager import cache_manager
+    import orchestrator.services
+    from common.models import Task
+else:
+
+    from .models import OrchestratorQuery, OrchestratorResponse
+    from .timing import TimingMetrics
+    from .config import get_settings
+    from .services import (
+        call_checklist_service,
+        call_service, 
+        http_client, 
+        ensure_http_client
+    )
+    from .utils import get_conversation_state
+    from .state_manager import cache_manager
+    from common.models import Task
+
 import uvicorn
 
 # Get settings
@@ -51,48 +69,6 @@ HTTP_TIMEOUT = httpx.Timeout(
 )
 CHECKPOINT_TIMEOUT = httpx.Timeout(settings.CHECKPOINT_SERVICE_TIMEOUT)
 PRIMARY_TIMEOUT = httpx.Timeout(settings.PRIMARY_SERVICE_TIMEOUT)
-
-
-"""
-Simplified Main entry point for the Conversation Orchestrator service.
-This module sets up the FastAPI application and defines the main orchestration endpoint.
-"""
-
-import asyncio
-import logging
-import json
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-import httpx
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Response, BackgroundTasks, status, Depends, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-from common.models import Task
-from .auth.validateAPI import get_current_user, JWTClaims
-import websockets
-from urllib.parse import urlparse
-
-# Import local modules - Only keeping what we need
-from orchestrator.models import OrchestratorQuery, OrchestratorResponse
-from orchestrator.timing import TimingMetrics
-from orchestrator.services import (
-    call_checklist_service,
-    call_service, 
-    http_client, 
-    ensure_http_client
-)
-from orchestrator.utils import get_conversation_state
-from orchestrator.state_manager import cache_manager
-
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-_logger = logging.getLogger(__name__)
-
-# Configuration constants
-HTTP_TIMEOUT = httpx.Timeout(10.0, connect=2.0, read=8.0)
-CHECKPOINT_TIMEOUT = httpx.Timeout(5.0)
-PRIMARY_TIMEOUT = httpx.Timeout(5.0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -115,7 +91,13 @@ async def lifespan(app: FastAPI):
     _logger.debug("HTTP client initialized with optimized settings")
 
     # Export the http_client to the services module
-    orchestrator.services.http_client = http_client
+    if __name__ == "__main__" and __package__ is None:
+        orchestrator.services.http_client = http_client
+    else:
+        from . import services
+        services.http_client=http_client
+        
+    ensure_http_client()
 
     yield
 
@@ -124,11 +106,6 @@ async def lifespan(app: FastAPI):
     _logger.info("HTTP client closed")
 
 app = FastAPI(title="Conversation Orchestrator", lifespan=lifespan)
-
-@app.on_event("startup")
-async def startup_event():
-    """Additional startup event handler"""
-    ensure_http_client()
 
 class SimplifiedOrchestrator:
     """Simplified orchestration logic for direct conversation flow."""

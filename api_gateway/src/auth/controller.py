@@ -6,8 +6,8 @@ import uuid
 from .schema import *
 from fastapi.encoders import jsonable_encoder
 from .schema import (RegistrationType, PlanType, UserRole)
-from api_gateway.database.db import get_database
-from api_gateway.utils.helperFunctions import generate_unique_id
+from ...database.db import get_database
+from ...utils.helperFunctions import generate_unique_id
 from pymongo.errors import DuplicateKeyError
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

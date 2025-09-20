@@ -9,10 +9,17 @@ import logging
 from typing import Optional, Dict, List
 import asyncio
 from datetime import datetime
-from orchestrator.state_manager import ConversationState
-from orchestrator.timing import TimingMetrics
-from orchestrator.services import call_service, CHECKPOINT_URL
-from common.models import Conversation, Task, Checkpoint, CheckpointType, CheckpointStatus
+
+if __name__ == "__main__" and __package__ is None:
+    from orchestrator.state_manager import ConversationState
+    from orchestrator.timing import TimingMetrics
+    from orchestrator.services import call_service, CHECKPOINT_URL
+    from common.models import Conversation, Task, Checkpoint, CheckpointType, CheckpointStatus
+else:
+    from .state_manager import ConversationState
+    from .timing import TimingMetrics
+    from .services import call_service, CHECKPOINT_URL
+    from common.models import Conversation, Task, Checkpoint, CheckpointType, CheckpointStatus
 
 _logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
 
 # memory/main.py - Ultra Low Latency Optimized Version
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
@@ -11,16 +11,26 @@ from datetime import datetime
 import json
 import asyncio
 import time
-from functools import lru_cache, wraps
+from functools import wraps
 from collections import defaultdict
 import pickle
 import hashlib
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from memory.redis_client import RedisMemory
-from memory.pinecone_client import PineconeMemory
-from memory.mongo_client import MongoMemory
-from memory.config import get_settings
+
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    from memory.redis_client import RedisMemory
+    from memory.pinecone_client import PineconeMemory
+    from memory.mongo_client import MongoMemory
+    from memory.config import get_settings
+else:
+    from .redis_client import RedisMemory
+    from .pinecone_client import PineconeMemory
+    from .mongo_client import MongoMemory
+    from .config import get_settings
 
 # Load settings
 settings = get_settings()
@@ -142,11 +152,11 @@ class OptimizedBaseModel(BaseModel):
         # Use enum values for better performance
         use_enum_values = True
         # Allow population by field name
-        allow_population_by_field_name = True
+        validate_by_name = True
         # Faster validation
         validate_assignment = False
         # Pre-compile regex patterns
-        anystr_strip_whitespace = True
+        str_strip_whitespace = True
         # Use faster JSON encoder
         json_encoders = {datetime: fast_json_encode}
 

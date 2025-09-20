@@ -22,8 +22,12 @@ import pickle
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from orchestrator.config import get_settings
-from common.models import Conversation, AgentResult, Task, Checkpoint
+if __name__ == "__main__" and __package__ is None:
+    from orchestrator.config import get_settings
+    from common.models import Conversation, AgentResult, Task, Checkpoint
+else:
+    from .config import get_settings
+    from common.models import Conversation, AgentResult, Task, Checkpoint
 
 _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

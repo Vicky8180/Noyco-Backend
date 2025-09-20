@@ -343,6 +343,29 @@ async def process_anxiety_message(request: AnxietyAgentRequest):
         _logger.error(f"Error in anxiety agent: {e}")
         raise HTTPException(status_code=500, detail=f"Anxiety agent error: {str(e)}")
 
+# === HEALTH CHECKS ===
+
+@app.get("/health")
+async def health_check():
+    """General health check for the specialized agents service"""
+    return {"status": "healthy", "message": "Specialized agents service is running"}
+
+@app.get("/therapy/health")
+async def therapy_health_check():
+    """Health check for the therapy agent"""
+    # Basic check, can be expanded with dependency checks (e.g., model loading)
+    return {"status": "healthy", "agent": "therapy_checkin"}
+
+@app.get("/loneliness/health")
+async def loneliness_health_check():
+    """Health check for the loneliness agent"""
+    return {"status": "healthy", "agent": "loneliness_companion"}
+
+@app.get("/accountability/health")
+async def accountability_health_check():
+    """Health check for the accountability agent"""
+    return {"status": "healthy", "agent": "accountability_buddy"}
+
 # Therapy streaming endpoint removed as requested
 
 # Emotional streaming endpoint removed as requested

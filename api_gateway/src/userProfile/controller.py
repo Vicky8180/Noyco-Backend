@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from .schema import UserProfile, LovedOne, PastStory, EmotionalCompanionAgent, AccountabilityAgent, SocialAnxietyAgent, TherapyAgent, LonelinessAgent, EmotionalGoal, AccountabilityGoal, AnxietyGoal, TherapyGoal, LonelinessGoal
 from ..auth.schema import Individual
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 from ...utils.helperFunctions import generate_unique_id
 from bson import ObjectId
 

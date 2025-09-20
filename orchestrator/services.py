@@ -12,11 +12,18 @@ from typing import List, Dict, Optional, Any, Callable
 import httpx
 from fastapi import HTTPException
 
-from orchestrator.timing import TimingMetrics
-from orchestrator.agents import get_service_url
-from orchestrator.caching import get_cached_checkpoint_evaluation, cache_checkpoint_evaluation
-from orchestrator.config import get_settings
-from common.models import AgentResult, AgentResponseStatus, CheckpointType, Checkpoint
+if __name__ == "__main__" and __package__ is None:
+    from orchestrator.timing import TimingMetrics
+    from orchestrator.agents import get_service_url
+    from orchestrator.caching import get_cached_checkpoint_evaluation, cache_checkpoint_evaluation
+    from orchestrator.config import get_settings
+    from common.models import AgentResult, AgentResponseStatus, CheckpointType, Checkpoint
+else:
+    from .timing import TimingMetrics
+    from .agents import get_service_url
+    from .caching import get_cached_checkpoint_evaluation, cache_checkpoint_evaluation
+    from .config import get_settings
+    from common.models import AgentResult, AgentResponseStatus, CheckpointType, Checkpoint
 
 _logger = logging.getLogger(__name__)
 

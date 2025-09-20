@@ -6,9 +6,7 @@ from typing import List, Dict, Any, Optional
 from pinecone import Pinecone
 from datetime import datetime
 import hashlib
-import json
 from sentence_transformers import SentenceTransformer
-import numpy as np
 
 # Global embedding cache with TTL
 _embedding_cache = {}

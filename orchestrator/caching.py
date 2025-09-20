@@ -8,8 +8,12 @@ Provides caching mechanisms for service responses to reduce latency.
 import logging
 import aiocache
 from typing import Dict, Optional, Any
-from orchestrator.config import get_settings
 
+if __name__ == "__main__" and __package__ is None:
+    from orchestrator.config import get_settings
+else:
+    from .config import get_settings
+    
 _logger = logging.getLogger(__name__)
 
 # Get settings

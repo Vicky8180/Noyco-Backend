@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import uvicorn
 import threading
 import time
@@ -165,19 +159,3 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\nShutting down all services...")
             sys.exit(0)
-# This script starts multiple FastAPI services in separate threads or processes.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -7,7 +7,7 @@ This module handles the agent configuration and detection logic.
 import logging
 from typing import List, Tuple, Dict, Any, Optional
 from functools import lru_cache
-from orchestrator.timing import TimingMetrics
+# from orchestrator.timing import TimingMetrics
 
 from common.models import AgentResult, AgentResponseStatus
 

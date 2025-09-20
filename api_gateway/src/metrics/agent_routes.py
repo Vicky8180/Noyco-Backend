@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 from ...middlewares.jwt_auth import JWTAuthController
 from ..auth.schema import JWTClaims
 from .agent_controller import AgentMetricsController

@@ -7,7 +7,6 @@ from typing import Any
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-import os
 from common.config import get_settings
 
 logger = logging.getLogger(__name__)

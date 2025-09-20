@@ -8,7 +8,7 @@ from .services import webhooks as dispatcher
 from ..billing.schema import UserRole
 from .client import get_stripe
 
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 from .config import get_settings
 from pydantic import BaseModel
 

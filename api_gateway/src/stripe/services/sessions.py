@@ -10,10 +10,10 @@ stripe = get_stripe()
 
 PRICE_MAP = {
     # Hospital prices
-    (UserRole.HOSPITAL.value, "lite", BillingCycle.MONTHLY): settings.PRICE_HOSP_LITE_MONTHLY,
-    (UserRole.HOSPITAL.value, "lite", BillingCycle.YEARLY): settings.PRICE_HOSP_LITE_YEARLY,
-    (UserRole.HOSPITAL.value, "pro", BillingCycle.MONTHLY): settings.PRICE_HOSP_PRO_MONTHLY,
-    (UserRole.HOSPITAL.value, "pro", BillingCycle.YEARLY): settings.PRICE_HOSP_PRO_YEARLY,
+    # (UserRole.HOSPITAL.value, "lite", BillingCycle.MONTHLY): settings.PRICE_HOSP_LITE_MONTHLY,
+    # (UserRole.HOSPITAL.value, "lite", BillingCycle.YEARLY): settings.PRICE_HOSP_LITE_YEARLY,
+    # (UserRole.HOSPITAL.value, "pro", BillingCycle.MONTHLY): settings.PRICE_HOSP_PRO_MONTHLY,
+    # (UserRole.HOSPITAL.value, "pro", BillingCycle.YEARLY): settings.PRICE_HOSP_PRO_YEARLY,
 
     # Individual prices
     (UserRole.INDIVIDUAL.value, "lite", BillingCycle.MONTHLY): settings.PRICE_IND_LITE_MONTHLY,

@@ -9,8 +9,6 @@ from datetime import datetime
 # Import new types from models
 from common.models import AgentResponseStatus, CheckpointType, CheckpointStatus
 
-import json
-
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):

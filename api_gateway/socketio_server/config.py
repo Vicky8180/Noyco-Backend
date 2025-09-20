@@ -1,6 +1,6 @@
 import socketio
 from .events import SocketEventHandlers
-from api_gateway.config import get_settings
+from ..config import get_settings
 
 def create_socketio_server(allowed_origins=None):
     """Create and configure the Socket.IO server"""

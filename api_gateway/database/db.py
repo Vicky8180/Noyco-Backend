@@ -1,7 +1,6 @@
 # api_gateway/database/db.py
 from pymongo import MongoClient
 from pymongo.database import Database
-from api_gateway.config import get_settings
 
 class DatabaseConnection:
     _instance = None
@@ -17,8 +16,15 @@ class DatabaseConnection:
         if self._db is None:
             # Import settings here to avoid circular import
             if self._settings is None:
-                from api_gateway.config import get_settings
-                self._settings = get_settings()
+                if __package__ is None or __package__ == '':
+                    import sys
+                    from os import path
+                    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+                    from api_gateway.config import get_settings
+                    self._settings = get_settings()
+                else:
+                    from ..config import get_settings
+                    self._settings = get_settings()
             
             mongo_uri = self._settings.MONGODB_URI
             db_name = self._settings.DATABASE_NAME
@@ -32,8 +38,8 @@ class DatabaseConnection:
     def _create_indexes(self):
         """Create database indexes for better performance"""
         # Hospitals indexes
-        self._db.hospitals.create_index("email", unique=True)
-        self._db.hospitals.create_index("id", unique=True)
+        # self._db.hospitals.create_index("email", unique=True)
+        # self._db.hospitals.create_index("id", unique=True)
 
         # Individual user indexes
         self._db.individuals.create_index("email", unique=True)

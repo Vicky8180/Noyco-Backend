@@ -6,6 +6,7 @@ Minimal main file with core FastAPI setup and routing
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import socketio
 import uvicorn
 import logging
@@ -23,12 +24,26 @@ logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", module="pydantic")
 
-# Core imports
-from .config import get_settings
-from .middlewares.jwt_auth_middleware import JWTAuthMiddleware
-from .socketio_server import create_socketio_server
-from .router_config import setup_routers, initialize_schedule_controller
-from .health_monitor import HealthMonitor
+# This block allows running the script directly while maintaining relative imports
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    # The following imports are now relative to the project root
+    from api_gateway.config import get_settings
+    from api_gateway.middlewares.jwt_auth_middleware import JWTAuthMiddleware
+    from api_gateway.socketio_server import create_socketio_server
+    # from api_gateway.router_config import setup_routers, initialize_schedule_controller
+    from api_gateway.router_config import setup_routers
+    from api_gateway.health_monitor import HealthMonitor
+else:
+    # Core imports
+    from .config import get_settings
+    from .middlewares.jwt_auth_middleware import JWTAuthMiddleware
+    from .socketio_server import create_socketio_server
+    # from .router_config import setup_routers, initialize_schedule_controller
+    from .router_config import setup_routers
+    from .health_monitor import HealthMonitor
 
 # Get settings
 settings = get_settings()
@@ -37,11 +52,25 @@ allowed_origins = settings.ALLOWED_ORIGINS.split(",")
 # Create and configure Socket.IO server
 sio, socket_handlers = create_socketio_server(allowed_origins)
 
+# Initialize health monitor
+health_monitor = HealthMonitor(settings)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup
+    await health_monitor.startup_health_display()
+    # Initialize schedule controller
+    # await initialize_schedule_controller()
+    
+    yield
+
 # Create FastAPI app
 app = FastAPI(
     title="Healthcare Platform API Gateway with Call Interface",
     description="Authentication, routing gateway, real-time call interface, and FHIR data integration for healthcare microservices",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS middleware
@@ -60,9 +89,6 @@ app.add_middleware(JWTAuthMiddleware)
 
 # Setup all application routers
 app = setup_routers(app)
-
-# Initialize health monitor
-health_monitor = HealthMonitor(settings)
 
 # Wrap FastAPI app with Socket.IO
 socket_app = socketio.ASGIApp(sio, app)
@@ -118,15 +144,6 @@ async def trigger_call():
 async def get_active_calls():
     """Get all active calls"""
     return socket_handlers.get_active_calls()
-
-# Startup event using HealthMonitor
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup using HealthMonitor"""
-    await health_monitor.startup_health_display()
-    
-    # Initialize schedule controller
-    await initialize_schedule_controller()
 
 # Main entry point
 if __name__ == "__main__":

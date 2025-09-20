@@ -7,7 +7,7 @@ from typing import Optional
 import smtplib
 from passlib.context import CryptContext
 from pymongo import MongoClient
-from api_gateway.config import get_settings
+from ...config import get_settings
 
 # Get configuration
 settings = get_settings()

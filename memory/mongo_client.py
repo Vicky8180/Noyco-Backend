@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import datetime
 from pymongo import MongoClient

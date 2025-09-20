@@ -5,12 +5,22 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uvicorn
-import os
 import logging
 
-from checkpoint.generator import generate_checkpoints
-from checkpoint.config import get_settings
-from common.models import Task, Checkpoint, CheckpointType
+# Conditional imports to handle both standalone and package execution
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    # Import from project root when running standalone
+    from checkpoint.generator import generate_checkpoints
+    from checkpoint.config import get_settings
+    from common.models import Task, Checkpoint, CheckpointType
+else:
+    # Import with relative paths when running as part of the package
+    from .generator import generate_checkpoints
+    from .config import get_settings
+    from common.models import Task, Checkpoint, CheckpointType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

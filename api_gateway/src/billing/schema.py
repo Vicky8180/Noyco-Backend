@@ -35,7 +35,7 @@ class ModelTier(str, Enum):
     
 class UserRole(str, Enum):
     ADMIN = "admin"
-    HOSPITAL = "hospital"
+    # HOSPITAL = "hospital"
     ASSISTANT = "assistant"
     INDIVIDUAL = "individual"
 
@@ -77,15 +77,15 @@ class PlanSelectionRequest(BaseModel):
     plan_type: PlanType
     id: str
  
-class ServiceSelectionRequest(BaseModel):
-    hospital_id: str
-    services: List[str]
+# class ServiceSelectionRequest(BaseModel):
+#     hospital_id: str
+#     services: List[str]
 
-    @validator('services')
-    def validate_services(cls, v):
-        if not v:
-            raise ValueError('At least one service must be selected')
-        return list(set(v))  # Remove duplicates
+#     @validator('services')
+#     def validate_services(cls, v):
+#         if not v:
+#             raise ValueError('At least one service must be selected')
+#         return list(set(v))  # Remove duplicates
 
 class IndividualPlanSelectionRequest(BaseModel):
     plan_type: PlanType
@@ -125,22 +125,22 @@ class AvailablePlansResponse(BaseModel):
 class AvailableServicesResponse(BaseModel):
     services: List[Dict[str, Any]]
 
-class HospitalPlanResponse(BaseModel):
-    id: str
-    hospital_id: str
-    plan_type: PlanType
-    status: PlanStatus
-    max_agents: int
-    available_services: List[str]
-    selected_services: List[str]
-    memory_stack: List[str]
-    summarizer_available: bool
-    human_escalation_available: bool
-    model_tier: str
-    max_context_length: int
-    rate_limit_per_minute: int
-    created_at: datetime
-    updated_at: datetime
+# class HospitalPlanResponse(BaseModel):
+#     id: str
+#     hospital_id: str
+#     plan_type: PlanType
+#     status: PlanStatus
+#     max_agents: int
+#     available_services: List[str]
+#     selected_services: List[str]
+#     memory_stack: List[str]
+#     summarizer_available: bool
+#     human_escalation_available: bool
+#     model_tier: str
+#     max_context_length: int
+#     rate_limit_per_minute: int
+#     created_at: datetime
+#     updated_at: datetime
 
 class IndividualPlanResponse(BaseModel):
     """Response model for individual plan details"""

@@ -1,6 +1,6 @@
 import hashlib, time
 from typing import Optional
-from api_gateway.database.db import get_database
+from ...database.db import get_database
 
 COLLECTION_NAME = "stripe_idempotency_keys"
 TTL_SECONDS = 24 * 3600
