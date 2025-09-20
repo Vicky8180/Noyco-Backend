@@ -331,7 +331,7 @@ class BillingController:
         """
         try:
             # Determine available plans and detail dictionary based on role
-            if user_role in [UserRole.HOSPITAL, UserRole.ADMIN]:
+            if user_role == UserRole.ADMIN:
                 available_plan_types = [PlanType.LITE, PlanType.PRO]
             elif user_role == UserRole.INDIVIDUAL:
                 available_plan_types = [PlanType.LITE, PlanType.PRO]
@@ -343,11 +343,7 @@ class BillingController:
             # Get current plan if any
             current_plan = None
             if role_entity_id:
-                if user_role == UserRole.HOSPITAL:
-                    plan_record = self.db.plans.find_one({"hospital_id": role_entity_id})
-                    if plan_record and "plan_type" in plan_record:
-                        current_plan = PlanType(plan_record["plan_type"])
-                elif user_role == UserRole.INDIVIDUAL:
+                if user_role == UserRole.INDIVIDUAL:
                     plan_record = self.db.plans.find_one({"individual_id": role_entity_id})
                     if plan_record and "plan_type" in plan_record:
                         current_plan = PlanType(plan_record["plan_type"])

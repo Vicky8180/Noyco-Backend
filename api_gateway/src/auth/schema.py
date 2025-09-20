@@ -184,7 +184,7 @@ class AssistantResponse(BaseModel):
     name: str
     phone: Optional[str]
     department: Optional[str]
-    hospital_id: str
+    individual_id: str  # Changed from hospital_id to individual_id
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -238,7 +238,7 @@ class Assistant(BaseModel):
     email: EmailStr
     phone: Optional[str]
     department: Optional[str]
-    hospital_id: str
+    individual_id: str  # Changed from hospital_id to individual_id
     is_active: bool = True
     created_at: datetime
     updated_at: datetime

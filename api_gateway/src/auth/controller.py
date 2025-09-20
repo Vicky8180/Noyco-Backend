@@ -221,59 +221,8 @@ class AuthController:
         password_hash = self.hash_password(request.password)
         created_at = updated_at = datetime.utcnow()
 
-    # If organisation, register in hospitals
-        if request.type == RegistrationType.ORGANIZATION:
-            existing = self.db.hospitals.find_one({
-            "$or": [{"email": request.email}, {"name": request.name}]
-        })
-            if existing:
-                raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Hospital with this email or name already exists"
-            )
-
-            hospital_id = generate_unique_id("hospital")
-            hospital = Hospital(
-            id=hospital_id,
-            name=request.name,
-            email=request.email,
-            password_hash=password_hash,
-            phone=request.phone or "Not provided",
-            website_link=str(request.website_link) if request.website_link else "https://example.com",
-            plan=request.plan,
-            status=HospitalStatus.ACTIVE,
-            created_at=created_at,
-            updated_at=updated_at
-        )
-
-            self.db.hospitals.insert_one(jsonable_encoder(hospital))
-
-        # Create hospital admin user
-            admin_user_id = generate_unique_id("user")
-            admin_user = User(
-            id=admin_user_id,
-            email=request.email,
-            password_hash=password_hash,
-            name=request.admin_name or request.name,
-            role=UserRole.HOSPITAL,
-            role_entity_id=hospital_id,
-            department="Administration",
-            created_at=created_at,
-            updated_at=updated_at
-        )
-
-            self.db.users.insert_one(jsonable_encoder(admin_user))
-
-            return {
-            "user_id": admin_user_id,
-            "id": hospital_id,
-            "type": "organisation",
-            "email": request.email,
-            "plan": request.plan
-        }
-
-    # If individual, register in individuals
-        elif request.type == RegistrationType.INDIVIDUAL:
+    # Only individual registration is supported now
+        if request.type == RegistrationType.INDIVIDUAL:
             individual_id = generate_unique_id("individual")
             individual = {
             "id": individual_id,
@@ -353,18 +302,18 @@ class AuthController:
         if user["role"] == UserRole.ADMIN.value:
             # Admin users don't have plan restrictions
             plan_type = None
-        elif user["role"] == UserRole.HOSPITAL.value:
-            # Get hospital info
-            hospital = self.db.hospitals.find_one({"id": user["role_entity_id"]})
-            if not hospital:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital not found"
-                )
+        # elif user["role"] == UserRole.HOSPITAL.value:
+        #     # Get hospital info
+        #     hospital = self.db.hospitals.find_one({"id": user["role_entity_id"]})
+        #     if not hospital:
+        #         raise HTTPException(
+        #             status_code=status.HTTP_404_NOT_FOUND,
+        #             detail="Hospital not found"
+        #         )
 
-            # Get plan from hospital
-            plan = hospital.get("plan")
-            plan_type = PlanType(plan) if plan else None
+        #     # Get plan from hospital
+        #     plan = hospital.get("plan")
+        #     plan_type = PlanType(plan) if plan else None
         elif user["role"] == UserRole.INDIVIDUAL.value:
             # Get individual user info
             individual = self.db.individuals.find_one({"id": user["role_entity_id"]})
@@ -378,7 +327,7 @@ class AuthController:
             plan = individual.get("plan")
             plan_type = PlanType(plan) if plan else None
         else:
-            # Assistant users inherit plan from their hospital
+            # Assistant users inherit plan from their individual owner
             assistant = self.db.assistants.find_one({"id": user["role_entity_id"]})
             if not assistant:
                 raise HTTPException(
@@ -386,15 +335,15 @@ class AuthController:
                     detail="Assistant not found"
                 )
 
-            hospital = self.db.hospitals.find_one({"id": assistant["hospital_id"]})
-            if not hospital:
+            individual = self.db.individuals.find_one({"id": assistant["individual_id"]})
+            if not individual:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital not found"
+                    detail="Individual not found"
                 )
 
-            # Get plan from hospital
-            plan = hospital.get("plan")
+            # Get plan from individual
+            plan = individual.get("plan")
             plan_type = PlanType(plan) if plan else None
 
         # Update last login timestamp
@@ -428,18 +377,18 @@ class AuthController:
         if role == UserRole.ADMIN:
             # Admin users don't have plan restrictions
             pass
-        elif role == UserRole.HOSPITAL:
-            # Get hospital info
-            hospital = self.db.hospitals.find_one({"id": role_entity_id})
-            if not hospital:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital not found"
-                )
+        # elif role == UserRole.HOSPITAL:
+        #     # Get hospital info
+        #     hospital = self.db.hospitals.find_one({"id": role_entity_id})
+        #     if not hospital:
+        #         raise HTTPException(
+        #             status_code=status.HTTP_404_NOT_FOUND,
+        #             detail="Hospital not found"
+        #         )
 
-            # Get plan from hospital
-            plan = hospital.get("plan")
-            plan_type = PlanType(plan) if plan else None
+        #     # Get plan from hospital
+        #     plan = hospital.get("plan")
+        #     plan_type = PlanType(plan) if plan else None
         elif role == UserRole.INDIVIDUAL:
             # Get individual user info
             individual = self.db.individuals.find_one({"id": role_entity_id})
@@ -453,7 +402,7 @@ class AuthController:
             plan = individual.get("plan")
             plan_type = PlanType(plan) if plan else None
         elif role == UserRole.ASSISTANT:
-            # Assistant users inherit plan from their hospital
+            # Assistant users inherit plan from their individual owner
             assistant = self.db.assistants.find_one({"id": role_entity_id})
             if not assistant:
                 raise HTTPException(
@@ -461,15 +410,15 @@ class AuthController:
                     detail="Assistant not found"
                 )
 
-            hospital = self.db.hospitals.find_one({"id": assistant["hospital_id"]})
-            if not hospital:
+            individual = self.db.individuals.find_one({"id": assistant["individual_id"]})
+            if not individual:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Hospital not found"
+                    detail="Individual not found"
                 )
 
-            # Get plan from hospital
-            plan = hospital.get("plan")
+            # Get plan from individual
+            plan = individual.get("plan")
             plan_type = PlanType(plan) if plan else None
 
         return {
@@ -500,11 +449,11 @@ class AuthController:
         )
 
         # If this is a hospital admin, also update hospital password
-        if user["role"] == UserRole.HOSPITAL.value:
-            self.db.hospitals.update_one(
-                {"id": user["hospital_id"]},
-                {"$set": {"password_hash": new_password_hash, "updated_at": datetime.utcnow()}}
-            )
+        # if user["role"] == UserRole.HOSPITAL.value:
+        #     self.db.hospitals.update_one(
+        #         {"id": user["hospital_id"]},
+        #         {"$set": {"password_hash": new_password_hash, "updated_at": datetime.utcnow()}}
+        #     )
 
         return {"message": "Password updated successfully"}
 
@@ -519,14 +468,14 @@ class AuthController:
                 detail="User with this email already exists"
             )
 
-        # Verify hospital exists and is active
+        # Verify individual exists and is active
         print(2)
-        hospital = self.db.hospitals.find_one({"id": role_entity_id})
+        individual = self.db.individuals.find_one({"id": role_entity_id})
         print(3)
-        if not hospital or hospital["status"] != HospitalStatus.ACTIVE.value:
+        if not individual:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or inactive hospital"
+                detail="Invalid individual"
             )
 
         # Generate unique IDs
@@ -558,8 +507,7 @@ class AuthController:
             email=request.email,
             phone=request.phone,
             department=request.department,
-            hospital_id=role_entity_id,
-            user_id=user_id,
+            individual_id=role_entity_id,  # Changed from hospital_id
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -581,9 +529,9 @@ class AuthController:
         )
 
     async def get_assistants(self, role_entity_id: str) -> List[AssistantResponse]:
-        """Get all assistants for a hospital"""
+        """Get all assistants for an individual"""
         assistants = []
-        cursor = self.db.assistants.find({"hospital_id": role_entity_id, "is_active": True})
+        cursor = self.db.assistants.find({"individual_id": role_entity_id, "is_active": True})
 
         for assistant_doc in cursor:
             # Convert MongoDB _id to string
@@ -596,7 +544,7 @@ class AuthController:
                 name=assistant_doc["name"],
                 phone=assistant_doc.get("phone"),
                 department=assistant_doc.get("department"),
-                hospital_id=assistant_doc["hospital_id"],
+                individual_id=assistant_doc["individual_id"],  # Changed from hospital_id
                 is_active=assistant_doc.get("is_active", True),
                 created_at=assistant_doc["created_at"],
                 updated_at=assistant_doc["updated_at"]
@@ -604,13 +552,13 @@ class AuthController:
 
         return assistants
 
-    async def get_assistant(self, assistant_id: str, hospital_id: str) -> AssistantResponse:
+    async def get_assistant(self, assistant_id: str, individual_id: str) -> AssistantResponse:
         """Get a specific assistant by ID"""
         # Assistants are stored with their unique identifier under the "id" field.
         # Earlier code erroneously queried the non-existent "assistant_id" field.
         assistant_doc = self.db.assistants.find_one({
             "id": assistant_id,
-            "hospital_id": hospital_id
+            "individual_id": individual_id  # Changed from hospital_id
         })
 
         if not assistant_doc:
@@ -625,12 +573,11 @@ class AuthController:
 
         return AssistantResponse(
             id=assistant_doc["id"],
-            assistant_id=assistant_doc["assistant_id"],
             email=assistant_doc["email"],
             name=assistant_doc["name"],
             phone=assistant_doc.get("phone"),
             department=assistant_doc.get("department"),
-            hospital_id=assistant_doc["hospital_id"],
+            individual_id=assistant_doc["individual_id"],  # Changed from hospital_id
             is_active=assistant_doc.get("is_active", True),
             created_at=assistant_doc["created_at"],
             updated_at=assistant_doc["updated_at"]
@@ -643,7 +590,7 @@ class AuthController:
         print(assistant_id, role_entity_id)
         assistant_doc = self.db.assistants.find_one({
             "id": assistant_id,
-            "hospital_id": role_entity_id
+            "individual_id": role_entity_id  # Changed from hospital_id
         })
 
         if not assistant_doc:
@@ -666,7 +613,7 @@ class AuthController:
                 user_id = user["id"]
                 # Patch the assistant document so this lookup is fast next time
                 self.db.assistants.update_one(
-                    {"id": assistant_id, "hospital_id": role_entity_id},
+                    {"id": assistant_id, "individual_id": role_entity_id},  # Changed from hospital_id
                     {"$set": {"user_id": user_id}}
                 )
 
@@ -702,7 +649,7 @@ class AuthController:
         # generate_unique_id when they are created. Using _id here would never
         # match and the update would silently fail.
         self.db.assistants.update_one(
-            {"id": assistant_id, "hospital_id": role_entity_id},
+            {"id": assistant_id, "individual_id": role_entity_id},  # Changed from hospital_id
             {"$set": update_data}
         )
 
@@ -726,7 +673,7 @@ class AuthController:
         # Get updated assistant
         updated_assistant = self.db.assistants.find_one({
             "id": assistant_id,
-            "hospital_id": role_entity_id
+            "individual_id": role_entity_id  # Changed from hospital_id
         })
 
         if "_id" in updated_assistant:
@@ -734,12 +681,11 @@ class AuthController:
 
         return AssistantResponse(
             id=updated_assistant["id"],
-
             email=updated_assistant["email"],
             name=updated_assistant["name"],
             phone=updated_assistant.get("phone"),
             department=updated_assistant.get("department"),
-            hospital_id=updated_assistant["hospital_id"],
+            individual_id=updated_assistant["individual_id"],  # Changed from hospital_id
             is_active=updated_assistant.get("is_active", True),
             created_at=updated_assistant["created_at"],
             updated_at=updated_assistant["updated_at"]
@@ -750,7 +696,7 @@ class AuthController:
         # Find the assistant
         assistant_doc = self.db.assistants.find_one({
             "id": assistant_id,
-            "hospital_id": role_entity_id
+            "individual_id": role_entity_id  # Changed from hospital_id
         })
 
         if not assistant_doc:
@@ -763,7 +709,7 @@ class AuthController:
         assistant_id = assistant_doc["id"]
 
         # Hard-delete assistant document
-        self.db.assistants.delete_one({"id": assistant_id, "hospital_id": role_entity_id})
+        self.db.assistants.delete_one({"id": assistant_id, "individual_id": role_entity_id})  # Changed from hospital_id
 
         # Remove the corresponding user account as well
         self.db.users.delete_one({"role_entity_id": assistant_id})
