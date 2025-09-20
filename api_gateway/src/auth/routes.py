@@ -18,12 +18,19 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 auth_controller = AuthController()
 jwt_auth = JWTAuthController()
 
-@router.post("/hospital/register")
-async def register_hospital(
+@router.post("/register")  # Changed from "/hospital/register" to just "/register"
+async def register_user(  # Changed function name
     request: RegistrationRequest,
     response: Response
 ):
-    """Register a new hospital OR individual. No auth cookies are issued until e-mail is verified."""
+    """Register a new individual user. No auth cookies are issued until e-mail is verified."""
+    # Only individual registration is supported now
+    if request.type != RegistrationType.INDIVIDUAL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only individual registration is supported"
+        )
+    
     # Create entity + user
     data = await auth_controller.register(request)
 
@@ -41,7 +48,7 @@ async def register_hospital(
         "user": {
             "id": data["user_id"],
             "email": data["email"],
-            "role": "individual" if request.type == "individual" else "hospital",
+            "role": "individual",  # Always individual now
             "role_entity_id": data["id"],
         },
     }
@@ -122,11 +129,11 @@ async def create_assistant(
     current_user: JWTClaims = Depends(jwt_auth.get_current_user),
     csrf_token: str = Header(..., alias="X-CSRF-Token")
 ):
-    """Create assistant user (only HOSPITAL can do this)"""
-    if current_user.role != UserRole.HOSPITAL and current_user.role != UserRole.ADMIN:
+    """Create assistant user (only INDIVIDUAL can do this)"""
+    if current_user.role != UserRole.INDIVIDUAL and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital administrators can create assistants"
+            detail="Only individual users can create assistants"
         )
 
     return await auth_controller.create_assistant(current_user.role_entity_id, request)
@@ -137,11 +144,11 @@ async def get_all_assistants(
 ):
     print(current_user)
     print("-----------------------------------------------------================")
-    """Get all assistants for the current hospital"""
-    if current_user.role != UserRole.HOSPITAL and current_user.role != UserRole.ADMIN:
+    """Get all assistants for the current individual"""
+    if current_user.role != UserRole.INDIVIDUAL and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital administrators can view assistants"
+            detail="Only individual users can view assistants"
         )
 
     return await auth_controller.get_assistants(current_user.role_entity_id)
@@ -152,13 +159,13 @@ async def get_assistant(
     current_user: JWTClaims = Depends(jwt_auth.get_current_user)
 ):
     """Get a specific assistant by ID"""
-    if current_user.role != UserRole.HOSPITAL and current_user.role != UserRole.ADMIN:
+    if current_user.role != UserRole.INDIVIDUAL and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital administrators can view assistants"
+            detail="Only individual users can view assistants"
         )
 
-    return await auth_controller.get_assistant(assistant_id, current_user.hospital_id)
+    return await auth_controller.get_assistant(assistant_id, current_user.role_entity_id)
 
 @router.put("/assistants/{assistant_id}", response_model=AssistantResponse)
 async def update_assistant(
@@ -168,10 +175,10 @@ async def update_assistant(
     csrf_token: str = Header(..., alias="X-CSRF-Token")
 ):
     """Update assistant details"""
-    if current_user.role != UserRole.HOSPITAL and current_user.role != UserRole.ADMIN:
+    if current_user.role != UserRole.INDIVIDUAL and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital administrators can update assistants"
+            detail="Only individual users can update assistants"
         )
 
     return await auth_controller.update_assistant(assistant_id, current_user.role_entity_id, request)
@@ -183,10 +190,10 @@ async def delete_assistant(
     csrf_token: str = Header(..., alias="X-CSRF-Token")
 ):
     """Delete an assistant"""
-    if current_user.role != UserRole.HOSPITAL and current_user.role != UserRole.ADMIN:
+    if current_user.role != UserRole.INDIVIDUAL and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital administrators can delete assistants"
+            detail="Only individual users can delete assistants"
         )
 
     return await auth_controller.delete_assistant(assistant_id, current_user.role_entity_id)
@@ -207,10 +214,7 @@ async def get_current_user_info(
             doc = auth_controller.db.individuals.find_one({"id": user.role_entity_id}, {"_id": 0, "name": 1, "phone": 1}) or {}
             name = doc.get("name")
             phone = doc.get("phone")
-        elif user.role == UserRole.HOSPITAL:
-            doc = auth_controller.db.hospitals.find_one({"id": user.role_entity_id}, {"_id":0,"name":1,"phone":1}) or {}
-            name = doc.get("name")
-            phone = doc.get("phone")
+        # Hospital role removed - no longer supported
 
         return {
             "user_id": user.user_id,
@@ -273,7 +277,7 @@ async def register_individual(
     response: Response
 ):
     """Register a new individual (self-service sign-up).
-    Works the same way as /hospital/register: account is created, marked un-verified and an OTP is e-mailed. No auth cookies are issued yet.
+    Works the same way as /register: account is created, marked un-verified and an OTP is e-mailed. No auth cookies are issued yet.
     """
 
     data = await auth_controller.register(request)
@@ -417,12 +421,10 @@ async def confirm_password_reset(body: PasswordResetConfirm):
     auth_controller.db.users.update_one({"email": body.email}, {"$set": {"password_hash": new_hash}})
 
     # Update corresponding role collection
-    if user_doc["role"] == UserRole.HOSPITAL:
-        coll = "hospitals"
-    elif user_doc["role"] == UserRole.INDIVIDUAL:
+    if user_doc["role"] == UserRole.INDIVIDUAL:
         coll = "individuals"
     else:
-        coll = None
+        coll = None  # HOSPITAL role no longer supported
     if coll:
         auth_controller.db[coll].update_one({"email": body.email}, {"$set": {"password_hash": new_hash}})
 
