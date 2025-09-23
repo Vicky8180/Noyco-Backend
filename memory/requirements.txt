@@ -3,5 +3,5 @@ uvicorn==0.22.0
 pydantic-settings==2.10.1
 redis==4.5.5
 pymongo==4.13.0
-pinecone==6.0.2
-sentence-transformers==4.1.0
+# pinecone==6.0.2
+# sentence-transformers==4.1.0

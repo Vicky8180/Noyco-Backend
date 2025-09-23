@@ -28,6 +28,34 @@ class APIGatewaySettings(BaseSettings):
     DATABASE_NAME: str 
     REDIS_URL: str 
     
+    # Service URLs
+    ORCHESTRATOR_URL: str
+    MEMORY_URL: str 
+    CHECKPOINT_URL: str
+    DETECTOR_URL: Optional[str] = None
+    PRIMARY_SERVICE_URL: str
+    
+    # Agent Service URLs
+    CHECKLIST_SERVICE_URL: str
+    PRIVACY_SERVICE_URL: Optional[str] = None
+    NUTRITION_SERVICE_URL: Optional[str] = None
+    FOLLOWUP_SERVICE_URL: Optional[str] = None
+    HISTORY_SERVICE_URL: Optional[str] = None
+    HUMAN_INTERVENTION_SERVICE_URL: Optional[str] = None
+    MEDICATION_SERVICE_URL: Optional[str] = None
+    
+    # Specialized Agent Services
+    LONELINESS_SERVICE_URL: str
+    ACCOUNTABILITY_SERVICE_URL: str
+    THERAPY_SERVICE_URL: str
+    EMOTIONAL_SERVICE_URL: Optional[str] = None
+    ANXIETY_SERVICE_URL: Optional[str] = None
+    
+    # Service Port Configuration (for health checks)
+    PRIMARY_SERVICE_PORT: Optional[int] = 8002
+    CHECKLIST_SERVICE_PORT: Optional[int] = 8002
+    AGENTS_SERVICE_PORT: Optional[int] = 8015
+    
     # CORS settings
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     

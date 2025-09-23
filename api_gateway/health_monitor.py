@@ -17,17 +17,39 @@ class HealthMonitor:
         
     async def comprehensive_health_check(self) -> Dict[str, Any]:
         """Comprehensive health check for all microservices in the healthcare platform"""
-        # Define all microservices and their health endpoints
+        # Define all microservices and their health endpoints using environment variables
         services = {
             "orchestrator": f"{self.settings.ORCHESTRATOR_URL}/health",
             "memory": f"{self.settings.MEMORY_URL}/health", 
             "checkpoint": f"{self.settings.CHECKPOINT_URL}/health",
-            "primary_agent": "http://localhost:8002/primary/health",
-            "checklist_agent": "http://localhost:8002/checklist/health", 
-            "loneliness_agent": "http://localhost:8015/loneliness/health",
-            "accountability_agent": "http://localhost:8015/accountability/health",
-            "therapy_agent": "http://localhost:8015/therapy/health"
         }
+        
+        # Add agent services using environment variables
+        # Extract base URLs and construct health endpoints
+        if hasattr(self.settings, 'PRIMARY_SERVICE_URL') and self.settings.PRIMARY_SERVICE_URL:
+            # Extract base URL (remove /primary/process suffix if present)
+            primary_base = self.settings.PRIMARY_SERVICE_URL.replace('/primary/process', '')
+            services["primary_agent"] = f"{primary_base}/primary/health"
+            
+        if hasattr(self.settings, 'CHECKLIST_SERVICE_URL') and self.settings.CHECKLIST_SERVICE_URL:
+            # Extract base URL (remove /checklist/process suffix if present)  
+            checklist_base = self.settings.CHECKLIST_SERVICE_URL.replace('/checklist/process', '')
+            services["checklist_agent"] = f"{checklist_base}/checklist/health"
+            
+        if hasattr(self.settings, 'LONELINESS_SERVICE_URL') and self.settings.LONELINESS_SERVICE_URL:
+            # Extract base URL (remove /loneliness-companion/process suffix if present)
+            loneliness_base = self.settings.LONELINESS_SERVICE_URL.replace('/loneliness-companion/process', '')
+            services["loneliness_agent"] = f"{loneliness_base}/loneliness/health"
+            
+        if hasattr(self.settings, 'ACCOUNTABILITY_SERVICE_URL') and self.settings.ACCOUNTABILITY_SERVICE_URL:
+            # Extract base URL (remove /accountability/process suffix if present)
+            accountability_base = self.settings.ACCOUNTABILITY_SERVICE_URL.replace('/accountability/process', '')
+            services["accountability_agent"] = f"{accountability_base}/accountability/health"
+            
+        if hasattr(self.settings, 'THERAPY_SERVICE_URL') and self.settings.THERAPY_SERVICE_URL:
+            # Extract base URL (remove /therapy/process suffix if present)
+            therapy_base = self.settings.THERAPY_SERVICE_URL.replace('/therapy/process', '')
+            services["therapy_agent"] = f"{therapy_base}/therapy/health"
         
         # Filter out None values
         services = {k: v for k, v in services.items() if v is not None}
@@ -227,18 +249,43 @@ class HealthMonitor:
         print("🚀 Healthcare Platform API Gateway Starting Up")
         print("🚀 " + "="*70)
         
-        # Define all microservices and their health endpoints (excluding self during startup)
+        # Define all microservices and their health endpoints using environment variables (excluding self during startup)
         services = {
             "Orchestrator": f"{self.settings.ORCHESTRATOR_URL}/health",
             "Memory Service": f"{self.settings.MEMORY_URL}/health", 
             "Checkpoint Service": f"{self.settings.CHECKPOINT_URL}/health",
-            "Primary Agent": "http://localhost:8002/primary/health",
-            "Checklist Agent": "http://localhost:8002/checklist/health", 
-            "Specialized Agents": "http://localhost:8015/health",
-            "Loneliness Companion": "http://localhost:8015/loneliness/health",
-            "Accountability Agent": "http://localhost:8015/accountability/health",
-            "Therapy Agent": "http://localhost:8015/therapy/health"
         }
+        
+        # Add agent services using environment variables
+        if hasattr(self.settings, 'PRIMARY_SERVICE_URL') and self.settings.PRIMARY_SERVICE_URL:
+            primary_base = self.settings.PRIMARY_SERVICE_URL.replace('/primary/process', '')
+            services["Primary Agent"] = f"{primary_base}/primary/health"
+            
+        if hasattr(self.settings, 'CHECKLIST_SERVICE_URL') and self.settings.CHECKLIST_SERVICE_URL:
+            checklist_base = self.settings.CHECKLIST_SERVICE_URL.replace('/checklist/process', '')
+            services["Checklist Agent"] = f"{checklist_base}/checklist/health"
+            
+        # Add specialized agents if URLs are available
+        if hasattr(self.settings, 'LONELINESS_SERVICE_URL') and self.settings.LONELINESS_SERVICE_URL:
+            loneliness_base = self.settings.LONELINESS_SERVICE_URL.replace('/loneliness-companion/process', '')
+            services["Loneliness Companion"] = f"{loneliness_base}/loneliness/health"
+            
+        if hasattr(self.settings, 'ACCOUNTABILITY_SERVICE_URL') and self.settings.ACCOUNTABILITY_SERVICE_URL:
+            accountability_base = self.settings.ACCOUNTABILITY_SERVICE_URL.replace('/accountability/process', '')
+            services["Accountability Agent"] = f"{accountability_base}/accountability/health"
+            
+        if hasattr(self.settings, 'THERAPY_SERVICE_URL') and self.settings.THERAPY_SERVICE_URL:
+            therapy_base = self.settings.THERAPY_SERVICE_URL.replace('/therapy/process', '')
+            services["Therapy Agent"] = f"{therapy_base}/therapy/health"
+            
+        # Add general specialized agents endpoint if available
+        if hasattr(self.settings, 'AGENTS_SERVICE_PORT'):
+            services["Specialized Agents"] = f"http://localhost:{self.settings.AGENTS_SERVICE_PORT}/health"
+        else:
+            # Fallback to extracting from any available specialized service URL
+            if hasattr(self.settings, 'LONELINESS_SERVICE_URL') and self.settings.LONELINESS_SERVICE_URL:
+                base_url = self.settings.LONELINESS_SERVICE_URL.split('/loneliness-companion')[0]
+                services["Specialized Agents"] = f"{base_url}/health"
         
         print("📊 Checking microservices health status...")
         print("-" * 70)

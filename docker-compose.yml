@@ -1,35 +1,12 @@
 version: '3.8'
 
 services:
-  # MongoDB Database
-  mongodb:
-    image: mongo:7.0
-    container_name: conversationalengine-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
-      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-conversionalEngine}
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - conversationalengine-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   # Redis Cache
   redis:
     image: redis:7.2-alpine
     container_name: conversationalengine-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -43,40 +20,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # API Gateway Service
-  api-gateway:
-    build:
-      context: .
-      dockerfile: api_gateway/Dockerfile
-    container_name: conversationalengine-api-gateway
-    restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
-      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine}?authSource=admin
-      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-password}@redis:6379
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/keys/google-cloudvision-credentials.json
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./keys:/app/keys:ro
-      - ./logs:/app/logs
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - conversationalengine-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   # Memory Service
   memory:
     build:
@@ -84,132 +27,46 @@ services:
       dockerfile: memory/Dockerfile
     container_name: conversationalengine-memory
     restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine}?authSource=admin
-      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-password}@redis:6379
-      - PINECONE_API_KEY=${PINECONE_API_KEY}
-      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-west1-gcp}
+    env_file:
+      - .env
     ports:
-      - "8010:8010"
+      - "8010:8080"
     volumes:
       - ./logs:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - conversationalengine-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Orchestrator Service
-  orchestrator:
+  # Core Service (Orchestrator + Primary + Checkpoint + Checklist)
+  core-service:
     build:
       context: .
-      dockerfile: orchestrator/Dockerfile
-    container_name: conversationalengine-orchestrator
+      dockerfile: core/Dockerfile
+    container_name: conversationalengine-core-service
     restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - MEMORY_URL=http://memory:8010
-      - CHECKPOINT_URL=http://checkpoint:8003
-      - PRIMARY_SERVICE_URL=http://primary-specialist:8004/process
-      - CHECKLIST_SERVICE_URL=http://checklist-specialist:8007/process
-      - LONELINESS_SERVICE_URL=http://agents-specialist:8015/loneliness/process
-      - ACCOUNTABILITY_SERVICE_URL=http://agents-specialist:8015/accountability/process
-      - THERAPY_SERVICE_URL=http://agents-specialist:8015/therapy/process
-      - EMOTIONAL_SERVICE_URL=http://agents-specialist:8015/emotional/process
-      - ANXIETY_SERVICE_URL=http://agents-specialist:8015/anxiety/process
+    env_file:
+      - .env
     ports:
-      - "8002:8002"
+      - "8002:8080"
     volumes:
       - ./logs:/app/logs
     depends_on:
-      - memory
-      - checkpoint
+      redis:
+        condition: service_healthy
+      memory:
+        condition: service_healthy
     networks:
       - conversationalengine-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Checkpoint Service
-  checkpoint:
-    build:
-      context: .
-      dockerfile: checkpoint/Dockerfile
-    container_name: conversationalengine-checkpoint
-    restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    ports:
-      - "8003:8003"
-    volumes:
-      - ./keys:/app/keys:ro
-      - ./logs:/app/logs
-    networks:
-      - conversationalengine-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Primary Specialist Service
-  primary-specialist:
-    build:
-      context: .
-      dockerfile: specialists/primary/Dockerfile
-    container_name: conversationalengine-primary-specialist
-    restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    ports:
-      - "8004:8004"
-    volumes:
-      - ./keys:/app/keys:ro
-      - ./logs:/app/logs
-    networks:
-      - conversationalengine-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Checklist Specialist Service
-  checklist-specialist:
-    build:
-      context: .
-      dockerfile: specialists/checklist/Dockerfile
-    container_name: conversationalengine-checklist-specialist
-    restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    ports:
-      - "8007:8007"
-    volumes:
-      - ./keys:/app/keys:ro
-      - ./logs:/app/logs
-    networks:
-      - conversationalengine-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -222,23 +79,52 @@ services:
       dockerfile: specialists/agents/Dockerfile
     container_name: conversationalengine-agents-specialist
     restart: unless-stopped
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - MONGODB_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongodb:27017/${DATABASE_NAME:-conversionalEngine}?authSource=admin
-      - DATABASE_NAME=${DATABASE_NAME:-conversionalEngine}
+    env_file:
+      - .env
     ports:
-      - "8015:8015"
+      - "8015:8080"
     volumes:
-      - ./keys:/app/keys:ro
+      - ./keys:/app/keys
       - ./logs:/app/logs
     depends_on:
-      mongodb:
+      redis:
         condition: service_healthy
     networks:
       - conversationalengine-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8015/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # API Gateway Service
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/Dockerfile
+    container_name: conversationalengine-api-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8080"
+    volumes:
+      - ./keys:/app/keys
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      memory:
+        condition: service_healthy
+      core-service:
+        condition: service_healthy
+      agents-specialist:
+        condition: service_healthy
+    networks:
+      - conversationalengine-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -249,9 +135,5 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data:
-    driver: local
-  mongodb_config:
-    driver: local
   redis_data:
     driver: local

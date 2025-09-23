@@ -89,6 +89,67 @@ async def health_check():
         }
     }
 
+@app.get("/health/detailed")
+async def detailed_health_check():
+    """Detailed health check that verifies all mounted microservices"""
+    import httpx
+    import asyncio
+    from datetime import datetime
+    
+    services = {
+        "orchestrator": "http://localhost:8002/orchestrator/health",
+        "primary": "http://localhost:8002/primary/health", 
+        "checkpoint": "http://localhost:8002/checkpoint/health",
+        "checklist": "http://localhost:8002/checklist/health"
+    }
+    
+    async def check_service(name: str, url: str):
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "name": name,
+                        "status": "healthy",
+                        "response": data,
+                        "response_time": response.elapsed.total_seconds() * 1000
+                    }
+                else:
+                    return {
+                        "name": name,
+                        "status": "unhealthy",
+                        "error": f"HTTP {response.status_code}",
+                        "response_time": response.elapsed.total_seconds() * 1000
+                    }
+        except Exception as e:
+            return {
+                "name": name,
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
+    # Check all services concurrently
+    tasks = [check_service(name, url) for name, url in services.items()]
+    results = await asyncio.gather(*tasks)
+    
+    # Calculate overall health
+    healthy_count = sum(1 for result in results if result["status"] == "healthy")
+    total_count = len(results)
+    overall_status = "healthy" if healthy_count == total_count else "degraded"
+    
+    return {
+        "status": overall_status,
+        "service": "core",
+        "timestamp": datetime.now().isoformat(),
+        "summary": {
+            "total_services": total_count,
+            "healthy_services": healthy_count,
+            "unhealthy_services": total_count - healthy_count
+        },
+        "services": {result["name"]: result for result in results}
+    }
+
 @app.get("/")
 async def root():
     """Root endpoint with service information"""
