@@ -23,10 +23,30 @@ try:
     from memory.redis_client import RedisMemory
     from memory.mongo_client import MongoMemory
     from common.gemini_client import get_gemini_client
-    from .data_manager import LonelinessDataManager
-    from .background_tasks import BackgroundTaskManager, MoodAnalyzer, ProgressTracker
-    # Import from unified schema
-    from ..schema import UserProfile, LonelinessAgent, LonelinessGoal
+    
+    # Import data manager with dual pattern
+    try:
+        # When running from agents folder
+        from loneliness.data_manager import LonelinessDataManager
+    except ImportError:
+        # When running as module
+        from .data_manager import LonelinessDataManager
+    
+    # Import background tasks with dual pattern
+    try:
+        # When running from agents folder
+        from loneliness.background_tasks import BackgroundTaskManager, MoodAnalyzer, ProgressTracker
+    except ImportError:
+        # When running as module
+        from .background_tasks import BackgroundTaskManager, MoodAnalyzer, ProgressTracker
+    
+    # Import from unified schema with dual pattern
+    try:
+        # When running from agents folder
+        from schema import UserProfile, LonelinessAgent, LonelinessGoal
+    except ImportError:
+        # When running as module
+        from ..schema import UserProfile, LonelinessAgent, LonelinessGoal
 except ImportError as e:
     logging.warning(f"Import error: {e}. Using minimal fallback implementations.")
     

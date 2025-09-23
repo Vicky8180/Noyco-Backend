@@ -19,23 +19,23 @@ class LiveKitVoiceSettings(BaseSettings):
     ORCHESTRATOR_ENDPOINT: str
     
     # Default session values for testing
-    DEFAULT_CONVERSATION_ID: str = "livekit_conversation"
-    DEFAULT_PLAN: str = "lite"
-    DEFAULT_INDIVIDUAL_ID: str = "individual_f068689a7d96"
-    DEFAULT_USER_PROFILE_ID: str = "user_profile_610f7db5658e"
-    DEFAULT_DETECTED_AGENT: str = "loneliness"
-    DEFAULT_AGENT_INSTANCE_ID: str = "loneliness_658"
-    DEFAULT_CALL_LOG_ID: str = "call_log_livekit"
+    DEFAULT_CONVERSATION_ID: str 
+    DEFAULT_PLAN: str 
+    DEFAULT_INDIVIDUAL_ID: str 
+    DEFAULT_USER_PROFILE_ID: str 
+    DEFAULT_DETECTED_AGENT: str 
+    DEFAULT_AGENT_INSTANCE_ID: str 
+    DEFAULT_CALL_LOG_ID: str 
     
     # TTS/STT Engine settings
-    TTS_ENGINE: str = Field("deepgram")
-    STT_ENGINE: str = Field("deepgram")
-    LLM_ENGINE: str = Field("custom")
+    TTS_ENGINE: str 
+    STT_ENGINE: str 
+    LLM_ENGINE: str 
 
     # API keys for TTS/STT services
-    DEEPGRAM_API_KEY: str = Field("3db5be5479faca82f4af64af88f9f05ef2a2d5c4")
-    ELEVENLABS_API_KEY: str = Field("sk_494866b596424b0401e00b299e5c10a76d41d7abd6c681ed")
-    GEMINI_API_KEY: str = Field("AIzaSyCOA-lmb8eSMvBn-SCZ7hE017WfKNKrGaw")
+    DEEPGRAM_API_KEY: str 
+    ELEVENLABS_API_KEY: str 
+    GEMINI_API_KEY: str
 
     # Audio settings
     SAMPLE_RATE: int = 16000

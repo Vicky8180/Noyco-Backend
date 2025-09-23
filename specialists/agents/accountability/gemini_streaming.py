@@ -11,19 +11,21 @@ from typing import Any, AsyncGenerator, Dict
 
 # Import config
 try:
-    from ..config import get_settings
+    from config import get_settings
     settings = get_settings()
 except ImportError:
+    from specialists.agents.config import get_settings
+    settings = get_settings()
     # Fallback for when config is not available
-    class FallbackSettings:
-        GEMINI_API_KEY = None
-        DEFAULT_MODEL_NAME = "gemini-1.5-flash"
-        DEFAULT_MAX_TOKENS = 150
-        DEFAULT_TEMPERATURE = 0.7
-        DEFAULT_TOP_P = 0.8
-        DEFAULT_TOP_K = 20
-        STREAM_CHUNK_SIZE = 3
-    settings = FallbackSettings()
+    # class FallbackSettings:
+    #     GEMINI_API_KEY = None
+    #     DEFAULT_MODEL_NAME = "gemini-1.5-flash"
+    #     DEFAULT_MAX_TOKENS = 150
+    #     DEFAULT_TEMPERATURE = 0.7
+    #     DEFAULT_TOP_P = 0.8
+    #     DEFAULT_TOP_K = 20
+    #     STREAM_CHUNK_SIZE = 3
+    # settings = FallbackSettings()
 
 logger = logging.getLogger(__name__)
 

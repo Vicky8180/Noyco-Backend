@@ -22,6 +22,7 @@ sys.path.insert(0, parent_dir)
 # Import required modules
 from pydantic import BaseModel, Field
 from uuid import uuid4
+import random
 
 # Always define the models first
 class CheckIn(BaseModel):
@@ -79,12 +80,32 @@ class UserProfile(BaseModel):
 try:
     from memory.redis_client import RedisMemory
     from memory.mongo_client import MongoMemory
-    # Try to import from unified schema (but use our local one as fallback)
+    # Import from unified schema - try both relative and absolute paths
     try:
-        from ..schema import UserProfile as UnifiedUserProfile
-        UserProfile = UnifiedUserProfile  # Use the unified one if available
+        # When running from agents folder
+        from schema import (
+            UserProfile as UnifiedUserProfile, BaseDBModel, 
+            generate_accountability_goal_id
+        )
+        # Override local UserProfile with unified one
+        UserProfile = UnifiedUserProfile
     except ImportError:
-        pass  # Use our local UserProfile definition
+        # When running from root folder via run_dev.py
+        try:
+            from specialists.agents.schema import (
+                UserProfile as UnifiedUserProfile, BaseDBModel,
+                generate_accountability_goal_id
+            )
+            # Override local UserProfile with unified one
+            UserProfile = UnifiedUserProfile
+        except ImportError:
+            # Fallback to local definitions if unified schema not available
+            def generate_accountability_goal_id() -> str:
+                return f"accountability_{random.randint(100, 999)}"
+            
+            class BaseDBModel(BaseModel):
+                created_at: datetime = Field(default_factory=datetime.utcnow)
+                updated_at: datetime = Field(default_factory=datetime.utcnow)
 except ImportError as e:
     # Fallback implementations for when memory clients aren't available
     class RedisMemory:

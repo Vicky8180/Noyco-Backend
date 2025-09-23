@@ -8,19 +8,29 @@ import uvicorn
 import logging
 
 # Conditional imports to handle both standalone and package execution
-if __name__ == "__main__" and __package__ is None:
-    import sys
-    from os import path
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-    # Import from project root when running standalone
-    from checkpoint.generator import generate_checkpoints
-    from checkpoint.config import get_settings
-    from common.models import Task, Checkpoint, CheckpointType
-else:
-    # Import with relative paths when running as part of the package
+try:
+    # Try relative imports first (when used as submodule)
     from .generator import generate_checkpoints
     from .config import get_settings
-    from common.models import Task, Checkpoint, CheckpointType
+    import_mode = "relative"
+except ImportError:
+    # Fallback to absolute imports (when run standalone)
+    if __name__ == "__main__" and __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        # Import from project root when running standalone
+        from checkpoint.generator import generate_checkpoints
+        from checkpoint.config import get_settings
+        import_mode = "standalone"
+    else:
+        # Import with relative paths when running as part of the package
+        from .generator import generate_checkpoints
+        from .config import get_settings
+        import_mode = "module"
+
+# Import common models - this is always at root level
+from common.models import Task, Checkpoint, CheckpointType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

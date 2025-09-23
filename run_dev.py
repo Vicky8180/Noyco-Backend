@@ -9,16 +9,11 @@ from typing import List, Dict
 services: List[Dict] = [
     {"module": "api_gateway.main", "port": 8000, "name": "API Gateway", "app_var": "socket_app"},
 
-    {"module": "orchestrator.main", "port": 8002, "name": "Orchestrator"},
-    {"module": "checkpoint.main", "port": 8003, "name": "Checkpoint"},
+    {"module": "core.main", "port": 8002, "name": "Core Service"},
   
     {"module": "memory.main", "port": 8010, "name": "Memory Service", "delay": 2},
 
     #  Support agents services
-    {"module": "specialists.primary.main", "port": 8004, "name": "Primary Specialist"},
- 
-    {"module": "specialists.checklist.main", "port": 8007, "name": "Checklist Specialist"},
-
     {"module": "specialists.agents.main", "port": 8015, "name": "Agents Specialist"},
 ]
 

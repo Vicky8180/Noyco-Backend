@@ -28,13 +28,6 @@ class APIGatewaySettings(BaseSettings):
     DATABASE_NAME: str 
     REDIS_URL: str 
     
-    # Service URLs
-    ORCHESTRATOR_URL: str = "http://localhost:8002"
-    ORCHESTRATOR_ENDPOINT: str = "http://localhost:8002/orchestrate"
-    MEMORY_URL: str = "http://localhost:8010"
-    DETECTOR_URL: str = "http://localhost:8014"
-    CHECKPOINT_URL: str = "http://localhost:8003"
-    
     # CORS settings
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     

@@ -25,13 +25,25 @@ sys.path.insert(0, parent_dir)
 try:
     from memory.redis_client import RedisMemory
     from memory.mongo_client import MongoMemory
-    # Import from unified schema
-    from ..schema import (
-        UserProfile, TherapyAgent, TherapyGoal, CheckIn, 
-        MoodLog, ProgressEntry, BaseDBModel, generate_therapy_goal_id
-    )
+    # Import from unified schema - try both relative and absolute paths
+    try:
+        # When running from agents folder
+        from schema import (
+            UserProfile, TherapyAgent, TherapyGoal, CheckIn, 
+            MoodLog, ProgressEntry, BaseDBModel, generate_therapy_goal_id
+        )
+    except ImportError:
+        # When running from root folder via run_dev.py
+        from specialists.agents.schema import (
+            UserProfile, TherapyAgent, TherapyGoal, CheckIn, 
+            MoodLog, ProgressEntry, BaseDBModel, generate_therapy_goal_id
+        )
+    
     # Import CheckpointState from local schema
-    from .schema import CheckpointState
+    try:
+        from therapy.schema import CheckpointState
+    except ImportError:
+        from specialists.agents.therapy.schema import CheckpointState
 except ImportError as e:
     logging.warning(f"Import error in therapy data manager: {e}. Using minimal fallback implementations.")
     import random
