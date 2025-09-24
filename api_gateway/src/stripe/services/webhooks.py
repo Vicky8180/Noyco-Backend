@@ -29,29 +29,30 @@ async def handle_checkout_completed(event):
         customer_id = session.get("customer")
         subscription_id = session.get("subscription")
 
-        if role == UserRole.HOSPITAL.value:
-            # Create a valid PlanSelectionRequest with proper PlanType enum
-            plan_type = PlanType(plan) if plan else PlanType.LITE
-            req = PlanSelectionRequest(plan_type=plan_type, id=role_entity_id)
-            
-            # Select the plan through controller
-            await controller.select_plan(request=req, user_id="stripe-webhook")
-            
-            # Set default services for hospital plans
-            default_services = ["privacy", "human_escalation", "checklist"]
-            
-            # Persist Stripe IDs in the plans collection
-            controller.db.plans.update_one(
-                {"hospital_id": role_entity_id},
-                {"$set": {
-                    "stripe_customer_id": customer_id, 
-                    "stripe_subscription_id": subscription_id,
-                    "status": PlanStatus.ACTIVE.value,
-                    "selected_services": default_services,
-                    "updated_at": datetime.utcnow()
-                }},
-            )
-        elif role == UserRole.INDIVIDUAL.value:
+        # if role == UserRole.HOSPITAL.value:
+        #     # Create a valid PlanSelectionRequest with proper PlanType enum
+        #     plan_type = PlanType(plan) if plan else PlanType.LITE
+        #     req = PlanSelectionRequest(plan_type=plan_type, id=role_entity_id)
+        #     
+        #     # Select the plan through controller
+        #     await controller.select_plan(request=req, user_id="stripe-webhook")
+        #     
+        #     # Set default services for hospital plans
+        #     default_services = ["privacy", "human_escalation", "checklist"]
+        #     
+        #     # Persist Stripe IDs in the plans collection
+        #     controller.db.plans.update_one(
+        #         {"hospital_id": role_entity_id},
+        #         {"$set": {
+        #             "stripe_customer_id": customer_id, 
+        #             "stripe_subscription_id": subscription_id,
+        #             "status": PlanStatus.ACTIVE.value,
+        #             "selected_services": default_services,
+        #             "updated_at": datetime.utcnow()
+        #         }},
+        #     )
+        # elif role == UserRole.INDIVIDUAL.value:
+        if role == UserRole.INDIVIDUAL.value:
             await controller.select_individual_plan(
                 individual_id=role_entity_id,
                 plan_type=PlanType(plan),
@@ -119,12 +120,13 @@ async def handle_invoice_payment_failed(event):
     role_entity_id = metadata.get("role_entity_id")
 
     try:
-        if role == UserRole.HOSPITAL.value:
-            controller.db.plans.update_one(
-                {"hospital_id": role_entity_id},
-                {"$set": {"status": PlanStatus.SUSPENDED.value, "updated_at": datetime.utcnow()}},
-            )
-        elif role == UserRole.INDIVIDUAL.value:
+        # if role == UserRole.HOSPITAL.value:
+        #     controller.db.plans.update_one(
+        #         {"hospital_id": role_entity_id},
+        #         {"$set": {"status": PlanStatus.SUSPENDED.value, "updated_at": datetime.utcnow()}},
+        #     )
+        # elif role == UserRole.INDIVIDUAL.value:
+        if role == UserRole.INDIVIDUAL.value:
             controller.db.plans.update_one(
                 {"individual_id": role_entity_id},
                 {"$set": {"status": PlanStatus.SUSPENDED.value, "updated_at": datetime.utcnow()}},
@@ -142,12 +144,13 @@ async def handle_invoice_payment_succeeded(event):
     role = metadata.get("role")
     role_entity_id = metadata.get("role_entity_id")
     try:
-        if role == UserRole.HOSPITAL.value:
-            controller.db.plans.update_one(
-                {"hospital_id": role_entity_id},
-                {"$set": {"status": PlanStatus.ACTIVE.value, "updated_at": datetime.utcnow()}},
-            )
-        elif role == UserRole.INDIVIDUAL.value:
+        # if role == UserRole.HOSPITAL.value:
+        #     controller.db.plans.update_one(
+        #         {"hospital_id": role_entity_id},
+        #         {"$set": {"status": PlanStatus.ACTIVE.value, "updated_at": datetime.utcnow()}},
+        #     )
+        # elif role == UserRole.INDIVIDUAL.value:
+        if role == UserRole.INDIVIDUAL.value:
             controller.db.plans.update_one(
                 {"individual_id": role_entity_id},
                 {"$set": {"status": PlanStatus.ACTIVE.value, "updated_at": datetime.utcnow()}},
@@ -262,12 +265,13 @@ async def handle_subscription_updated(event):
         if status in ["canceled", "unpaid", "past_due", "paused"]:
             new_status = PlanStatus.SUSPENDED
 
-        if role == UserRole.HOSPITAL.value:
-            controller.db.plans.update_one(
-                {"hospital_id": role_entity_id},
-                {"$set": {"status": new_status.value}},
-            )
-        elif role == UserRole.INDIVIDUAL.value:
+        # if role == UserRole.HOSPITAL.value:
+        #     controller.db.plans.update_one(
+        #         {"hospital_id": role_entity_id},
+        #         {"$set": {"status": new_status.value}},
+        #     )
+        # elif role == UserRole.INDIVIDUAL.value:
+        if role == UserRole.INDIVIDUAL.value:
             controller.db.plans.update_one(
                 {"individual_id": role_entity_id},
                 {"$set": {"status": new_status.value}},
@@ -286,12 +290,13 @@ async def handle_subscription_deleted(event):
     role_entity_id = metadata.get("role_entity_id")
 
     try:
-        if role == UserRole.HOSPITAL.value:
-            controller.db.plans.update_one(
-                {"hospital_id": role_entity_id},
-                {"$set": {"status": PlanStatus.CANCELLED.value}},
-            )
-        elif role == UserRole.INDIVIDUAL.value:
+        # if role == UserRole.HOSPITAL.value:
+        #     controller.db.plans.update_one(
+        #         {"hospital_id": role_entity_id},
+        #         {"$set": {"status": PlanStatus.CANCELLED.value}},
+        #     )
+        # elif role == UserRole.INDIVIDUAL.value:
+        if role == UserRole.INDIVIDUAL.value:
             controller.db.plans.update_one(
                 {"individual_id": role_entity_id},
                 {"$set": {"status": PlanStatus.CANCELLED.value}},

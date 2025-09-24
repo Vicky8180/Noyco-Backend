@@ -1,0 +1,60 @@
+substitutions:
+  _REGION: us-central1
+  _ARTIFACT_REGISTRY_REPO: conversationalengine-repo
+
+steps:
+  # Build the agents-specialist service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-agents-specialist'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+      - '-f'
+      - 'specialists/agents/Dockerfile'
+      - '.'
+  
+  # Push the agents-specialist service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-agents-specialist'
+    waitFor: ['build-agents-specialist']
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA']
+
+  # Deploy agents-specialist service to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-agents-specialist'
+    waitFor: ['push-agents-specialist']
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'conversationalengine-agents-specialist'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--cpu-boost'
+      - '--max-instances'
+      - '3'
+      - '--concurrency'
+      - '5' # Low concurrency for CPU-intensive tasks
+      - '--update-secrets'
+      - conversationalengine-secrets=conversationalengine-secrets:latest
+      
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/194878370435/secrets/conversationalengine-secrets/versions/latest
+      env: 'conversationalengine-secrets'
+
+options:
+  machineType: 'E2_HIGHCPU_8'

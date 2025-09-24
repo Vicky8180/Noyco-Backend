@@ -1,0 +1,59 @@
+substitutions:
+  _REGION: us-central1
+  _ARTIFACT_REGISTRY_REPO: conversationalengine-repo
+
+steps:
+  # Build the api-gateway service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-api-gateway'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+      - '-f'
+      - 'api_gateway/Dockerfile'
+      - '.'
+  
+  # Push the api-gateway service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-api-gateway'
+    waitFor: ['build-api-gateway']
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA']
+
+  # Deploy api-gateway service to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-api-gateway'
+    waitFor: ['push-api-gateway']
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'conversationalengine-api-gateway'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '10'
+      - '--concurrency'
+      - '80'
+      - '--update-secrets'
+      - conversationalengine-secrets=conversationalengine-secrets:latest
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/194878370435/secrets/conversationalengine-secrets/versions/latest
+      env: 'conversationalengine-secrets'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
