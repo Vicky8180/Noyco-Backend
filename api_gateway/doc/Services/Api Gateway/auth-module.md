@@ -1061,7 +1061,7 @@ def debug_token(token: str):
 **Symptoms:** OTP emails not received
 **Causes:**
 - SMTP configuration errors
-- Gmail app password issues
+- Zoho Mail app password issues
 - Rate limiting
 
 **Solutions:**
@@ -1069,7 +1069,7 @@ def debug_token(token: str):
 # Test email configuration
 def test_email_config():
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        with smtplib.SMTP_SSL("smtp.zoho.com", 465) as smtp:
             smtp.login(SMTP_USER, SMTP_PASS)
             print("SMTP connection successful")
     except Exception as e:
