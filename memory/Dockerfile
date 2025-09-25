@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    SERVICE_PORT=8010 \
+    SERVICE_PORT=8080 \
     PYTHONPATH=/app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \

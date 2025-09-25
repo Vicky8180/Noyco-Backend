@@ -12,6 +12,7 @@ import uvicorn
 import time
 import json
 import asyncio
+from config import get_settings
 
 # Import agent processors
 if __name__ == "__main__" and __package__ is None:
@@ -36,6 +37,9 @@ from common.models import Checkpoint
 logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 _logger = logging.getLogger(__name__)
+
+# Load settings
+settings = get_settings()
 
 app = FastAPI(
     title="Specialized Support Agents",
@@ -391,4 +395,4 @@ async def root():
 
 # Run the application
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8015)
+    uvicorn.run(app, host=settings.AGENTS_SERVICE_HOST, port=settings.AGENTS_SERVICE_PORT)

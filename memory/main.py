@@ -815,7 +815,7 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8010,
+        port=settings.SERVICE_PORT,
         workers=1,  # Single worker for optimal caching
         loop="asyncio",  # Use standard asyncio instead of uvloop
         http="h11",  # Use standard h11 instead of httptools
