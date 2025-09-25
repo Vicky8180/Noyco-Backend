@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    SERVICE_PORT=8002 \
+    SERVICE_PORT=8000 \
     PYTHONPATH=/app
 
 # Install system dependencies
@@ -47,11 +47,11 @@ RUN mkdir -p /app/logs && \
 USER appuser
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Start the Core Service
-CMD ["python", "-m", "uvicorn", "core.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "uvicorn", "core.main:app"]
