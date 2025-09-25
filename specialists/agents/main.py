@@ -12,7 +12,15 @@ import uvicorn
 import time
 import json
 import asyncio
-from config import get_settings
+
+# Import config with fallback for different environments
+try:
+    from .config import get_settings
+except ImportError:
+    try:
+        from config import get_settings
+    except ImportError:
+        from specialists.agents.config import get_settings
 
 # Import agent processors
 if __name__ == "__main__" and __package__ is None:
