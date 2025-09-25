@@ -25,6 +25,7 @@ steps:
     id: 'deploy-agents-specialist'
     waitFor: ['push-agents-specialist']
     entrypoint: gcloud
+    timeout: 600s
     args:
       - 'run'
       - 'deploy'
@@ -43,6 +44,8 @@ steps:
       - '--cpu-boost'
       - '--max-instances'
       - '3'
+      - '--timeout'
+      - '600'
       - '--concurrency'
       - '5' # Low concurrency for CPU-intensive tasks
       - '--update-secrets'
