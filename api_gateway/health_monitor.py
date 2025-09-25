@@ -137,7 +137,18 @@ class HealthMonitor:
         try:
             import pymongo
             from pymongo import MongoClient
-            mongo_client = MongoClient(self.settings.MONGODB_URI, serverSelectionTimeoutMS=5000)
+            
+            # Enhanced MongoDB connection for cloud deployment
+            mongo_client = MongoClient(
+                self.settings.MONGODB_URI,
+                serverSelectionTimeoutMS=30000,  # 30 seconds
+                connectTimeoutMS=30000,          # 30 seconds
+                socketTimeoutMS=30000,           # 30 seconds
+                ssl=True,                        # Enable SSL
+                tlsAllowInvalidCertificates=False, # Validate certificates
+                tlsAllowInvalidHostnames=False,   # Validate hostnames
+                directConnection=False           # Use load balancer
+            )
             mongo_client.admin.command('ping')
             database_status["mongodb"] = {
                 "status": "healthy",
@@ -353,7 +364,18 @@ class HealthMonitor:
         try:
             import pymongo
             from pymongo import MongoClient
-            mongo_client = MongoClient(self.settings.MONGODB_URI, serverSelectionTimeoutMS=3000)
+            
+            # Enhanced MongoDB connection for cloud deployment
+            mongo_client = MongoClient(
+                self.settings.MONGODB_URI,
+                serverSelectionTimeoutMS=30000,  # 30 seconds
+                connectTimeoutMS=30000,          # 30 seconds
+                socketTimeoutMS=30000,           # 30 seconds
+                ssl=True,                        # Enable SSL
+                tlsAllowInvalidCertificates=False, # Validate certificates
+                tlsAllowInvalidHostnames=False,   # Validate hostnames
+                directConnection=False           # Use load balancer
+            )
             mongo_client.admin.command('ping')
             print(f"✅ MongoDB               - CONNECTED ({self.settings.DATABASE_NAME})")
             mongo_client.close()
