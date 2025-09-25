@@ -17,19 +17,34 @@ class DateTimeEncoder(json.JSONEncoder):
 
 class RedisMemory:
     def __init__(self, redis_url: str = "redis://localhost:6379"):
-        logging.debug("🔵 Initializing Redis client...")
-        # Parse Redis URL to extract components
-        from urllib.parse import urlparse
-        parsed = urlparse(redis_url)
+        logging.debug(f"🔵 Initializing Redis client with URL: {redis_url}")
         
-        # Use low socket timeouts so failing Redis doesn't block API
-        self.redis = Redis(
-            host=parsed.hostname or '127.0.0.1',
-            port=parsed.port or 6379,
-            db=0,
-            socket_connect_timeout=1,  # seconds
-            socket_timeout=2
-        )
+        # Use Redis.from_url() for better URL parsing and support for all Redis URL formats
+        # This handles authentication, SSL, and other Redis URL parameters automatically
+        try:
+            # Use low socket timeouts so failing Redis doesn't block API
+            self.redis = Redis.from_url(
+                redis_url,
+                socket_connect_timeout=1,  # seconds
+                socket_timeout=2,
+                retry_on_timeout=True,
+                health_check_interval=30,  # Health check every 30 seconds
+                decode_responses=False  # Keep as bytes for JSON compatibility
+            )
+            logging.info(f"✅ Redis client initialized successfully")
+        except Exception as e:
+            logging.error(f"❌ Failed to initialize Redis client: {e}")
+            # Fallback to manual parsing for backward compatibility
+            from urllib.parse import urlparse
+            parsed = urlparse(redis_url)
+            
+            self.redis = Redis(
+                host=parsed.hostname or '127.0.0.1',
+                port=parsed.port or 6379,
+                db=0,
+                socket_connect_timeout=1,
+                socket_timeout=2
+            )
 
     async def check_connection(self):
         try:
