@@ -100,7 +100,7 @@ async def detailed_health_check():
     import asyncio
     from datetime import datetime
     
-    base_url = f"http://localhost:{config.port}"
+    base_url = f"http://localhost:{config.SERVICE_PORT}"
     
     services = {
         "orchestrator": f"{base_url}/orchestrator/health",
