@@ -15,7 +15,7 @@ def _load_production_secrets():
     """
     # This is the environment variable you will set in Cloud Run
     # Its value will be the entire content of your production .env file
-    secret_content = os.getenv("conversationalengine-secret")
+    secret_content = os.getenv("conversationalengine-secrets")
 
     if secret_content:
         logger.info("✅ Production secrets found. Loading from environment.")
