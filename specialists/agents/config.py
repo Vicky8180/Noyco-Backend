@@ -56,8 +56,8 @@ class AgentsSettings(BaseSettings):
     # Service Configuration
     SERVICE_NAME: str = "agents"
     SERVICE_VERSION: str = "1.0.0"
-    AGENTS_SERVICE_PORT: int = 8015
-    AGENTS_SERVICE_HOST: str = "0.0.0.0"
+    SERVICE_PORT: int = 8015
+    SERVICE_HOST: str = "0.0.0.0"
     
     class Config:
         # env_file = ".env"

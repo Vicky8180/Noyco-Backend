@@ -186,6 +186,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=config.port,  # Using the orchestrator's original port
+        port=config.SERVICE_PORT,  # Using the orchestrator's original port
         log_level="info"
     )

@@ -395,4 +395,4 @@ async def root():
 
 # Run the application
 if __name__ == "__main__":
-    uvicorn.run(app, host=settings.AGENTS_SERVICE_HOST, port=settings.AGENTS_SERVICE_PORT)
+    uvicorn.run(app, host=settings.SERVICE_HOST, port=settings.SERVICE_PORT)

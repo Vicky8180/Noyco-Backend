@@ -44,7 +44,7 @@ class CoreConfig:
     
     def __init__(self):
         self.host = os.getenv('CORE_SERVICE_HOST', '0.0.0.0')
-        self.port = int(os.getenv('PORT', '8002'))
+        self.SERVICE_PORT = int(os.getenv('SERVICE_PORT', '8002'))
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
         
         # Service-specific configurations
