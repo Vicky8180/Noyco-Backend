@@ -51,10 +51,10 @@ steps:
 images:
   - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
 
-availableSecrets:
-  secretManager:
-    - versionName: projects/562270549707/secrets/conversationalengine-secrets/versions/latest
-      env: 'conversationalengine-secrets'
+# availableSecrets:
+#   secretManager:
+#     - versionName: projects/562270549707/secrets/conversationalengine-secrets/versions/latest
+#       env: 'conversationalengine-secrets'
 
 options:
   logging: CLOUD_LOGGING_ONLY
