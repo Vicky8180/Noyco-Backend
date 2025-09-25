@@ -19,6 +19,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             # "/auth/hospital/register",
             "/auth/individual/register",
             "/auth/login",
+            "/auth/google/login",
             "/auth/me",
             "/auth/refresh",
             "/docs",

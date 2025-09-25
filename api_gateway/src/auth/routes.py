@@ -5,8 +5,9 @@ from .controller import AuthController
 from ...middlewares.jwt_auth import JWTAuthController
 from .schema import *
 from datetime import datetime, timedelta
+import uuid
 from typing import List
-from .email_service import send_signup_otp, send_password_reset_otp, verify_otp
+from .email_service import send_signup_otp, send_password_reset_otp, verify_otp, test_smtp_connection, send_test_email
 # Logging
 import logging
 logger = logging.getLogger("auth.password_reset")
@@ -17,6 +18,11 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 auth_controller = AuthController()
 jwt_auth = JWTAuthController()
+try:
+    from ...config import get_settings
+    _settings = get_settings()
+except Exception:
+    _settings = None
 
 @router.post("/register")  # Changed from "/hospital/register" to just "/register"
 async def register_user(  # Changed function name
@@ -114,6 +120,156 @@ async def logout(
 
     return {"success": True, "message": "Logged out successfully"}
 
+@router.post("/google/login")
+async def google_login(request: Request, response: Response):
+    """Login with Google ID token (Option 2: exchange for our JWT).
+
+    Body: { id_token: string }
+    Verifies Google token, upserts user as Individual if needed, issues our cookies.
+    """
+    try:
+        body = await request.json()
+        id_token_str = body.get("id_token")
+        if not id_token_str:
+            raise HTTPException(status_code=400, detail="Missing id_token")
+
+        # Ensure GOOGLE_CLIENT_ID configured
+        if not _settings or not _settings.GOOGLE_CLIENT_ID:
+            raise HTTPException(status_code=500, detail="Google auth not configured")
+
+        # Verify the Google ID token
+        try:
+            from google.oauth2 import id_token as google_id_token
+            from google.auth.transport import requests as google_requests
+        except ImportError as e:
+            logger.error(f"Google auth library not available: {str(e)}")
+            raise HTTPException(status_code=500, detail="google-auth library not installed")
+
+        try:
+            # Create request instance
+            google_request = google_requests.Request()
+            
+            # Verify with clock skew tolerance
+            g_payload = google_id_token.verify_oauth2_token(
+                id_token_str,
+                google_request,
+                _settings.GOOGLE_CLIENT_ID,
+                clock_skew_in_seconds=300  # Allow 5 minutes clock skew
+            )
+        except ValueError as e:
+            logger.error(f"Google token verification failed: {str(e)}")
+            # Return more user-friendly error messages
+            error_msg = str(e)
+            if "Token used too early" in error_msg:
+                raise HTTPException(status_code=401, detail="Clock synchronization issue. Please try again in a moment.")
+            elif "Token used too late" in error_msg:
+                raise HTTPException(status_code=401, detail="Token expired. Please sign in again.")
+            elif "Invalid token" in error_msg:
+                raise HTTPException(status_code=401, detail="Invalid Google token. Please sign in again.")
+            else:
+                raise HTTPException(status_code=401, detail="Google authentication failed. Please try again.")
+        except Exception as e:
+            logger.error(f"Unexpected error during Google token verification: {str(e)}")
+            raise HTTPException(status_code=500, detail="Authentication service temporarily unavailable.")
+
+        issuer = g_payload.get("iss")
+        if issuer not in {"accounts.google.com", "https://accounts.google.com"}:
+            raise HTTPException(status_code=401, detail="Invalid token issuer")
+
+        email_verified = g_payload.get("email_verified", False)
+        if not email_verified:
+            raise HTTPException(status_code=401, detail="Google email not verified")
+
+        email = g_payload.get("email")
+        name = g_payload.get("name") or (email.split("@")[0] if email else None)
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token missing e-mail")
+
+        # Upsert user: users + individuals
+        user_doc = auth_controller.find_user_by_email(email)
+        if not user_doc:
+            created_at = datetime.utcnow()
+            individual_id = f"individual_{uuid.uuid4().hex[:12]}"
+            individual = {
+                "id": individual_id,
+                "name": name or email,
+                "email": email,
+                "password_hash": "",  # password-less account (Google)
+                "phone": "Not provided",
+                "created_at": created_at,
+                "updated_at": created_at,
+                "onboarding_completed": False,
+            }
+            auth_controller.db.individuals.insert_one(individual)
+
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user = {
+                "id": user_id,
+                "email": email,
+                "password_hash": "",  # password-less
+                "name": name or email,
+                "role": UserRole.INDIVIDUAL.value,
+                "role_entity_id": individual_id,
+                "department": None,
+                "is_active": True,
+                "email_verified": True,  # Verified by Google
+                "created_at": created_at,
+                "updated_at": created_at,
+                "last_login": created_at,
+            }
+            auth_controller.db.users.insert_one(user)
+            user_doc = user
+        else:
+            # Ensure account is active and mark verified
+            if not user_doc.get("is_active", True):
+                raise HTTPException(status_code=401, detail="Account is deactivated")
+            auth_controller.db.users.update_one(
+                {"id": user_doc["id"]},
+                {"$set": {"email_verified": True, "updated_at": datetime.utcnow(), "last_login": datetime.utcnow()}},
+            )
+
+        # Determine plan via role entity
+        role = UserRole(user_doc["role"]) if isinstance(user_doc.get("role"), str) else user_doc.get("role")
+        role_entity_id = user_doc["role_entity_id"]
+        plan_type = None
+        if role == UserRole.INDIVIDUAL:
+            ind = auth_controller.db.individuals.find_one({"id": role_entity_id})
+            plan = ind.get("plan") if ind else None
+            plan_type = PlanType(plan) if plan else None
+
+        # Issue our cookies
+        access_token = jwt_auth.create_access_token(
+            user_doc["id"],
+            role_entity_id,
+            role,
+            email,
+            plan_type,
+        )
+        refresh_token = jwt_auth.create_refresh_token(user_doc["id"], role_entity_id)
+        csrf_token = jwt_auth.set_auth_cookies(response, access_token, refresh_token)
+
+        # Add CORS headers explicitly for Google auth
+        origin = request.headers.get("origin")
+        if origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+
+        return {
+            "success": True,
+            "user": {
+                "id": user_doc["id"],
+                "email": email,
+                "role": role.value if isinstance(role, UserRole) else role,
+                "role_entity_id": role_entity_id,
+            },
+            "csrf_token": csrf_token,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Google login failed: %s", e)
+        raise HTTPException(status_code=500, detail="Google login failed")
+
 @router.post("/password/update")
 async def update_password(
     request: PasswordUpdateRequest,
@@ -207,13 +363,18 @@ async def get_current_user_info(
         user = jwt_auth.get_current_user(request)
         print(user)
 
-        # Fetch additional profile information (name, phone) from DB
+        # Fetch additional profile information (name, phone, password status) from DB
         name = None
         phone = None
+        has_password = False
         if user.role == UserRole.INDIVIDUAL:
             doc = auth_controller.db.individuals.find_one({"id": user.role_entity_id}, {"_id": 0, "name": 1, "phone": 1}) or {}
             name = doc.get("name")
             phone = doc.get("phone")
+            
+            # Check if user has a password (non-OAuth user)
+            user_doc = auth_controller.db.users.find_one({"id": user.user_id}, {"_id": 0, "password_hash": 1})
+            has_password = bool(user_doc and user_doc.get("password_hash", "").strip())
         # Hospital role removed - no longer supported
 
         return {
@@ -224,7 +385,8 @@ async def get_current_user_info(
             "name": name,
             "phone": phone,
             "plan": user.plan,
-            "authenticated": True
+            "authenticated": True,
+            "has_password": has_password
         }
     except HTTPException:
         # Return empty response if no valid session
@@ -430,3 +592,46 @@ async def confirm_password_reset(body: PasswordResetConfirm):
 
     logger.info(f"Password reset completed for {body.email}")
     return {"success": True}
+
+
+# ──────────────────────────────────────────────────────────────
+#  SMTP Testing Routes (for Zoho Mail migration)
+# ──────────────────────────────────────────────────────────────
+
+@router.get("/smtp/test-connection")
+async def test_smtp_connection_route():
+    """Test SMTP connection to Zoho Mail server."""
+    result = test_smtp_connection()
+    if result["success"]:
+        return {"status": "success", "message": result["message"]}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["error"]
+        )
+
+
+@router.post("/smtp/send-test-email")
+async def send_test_email_route(
+    request: Request,
+    current_user: JWTClaims = Depends(jwt_auth.get_current_user),
+    csrf_token: str = Header(..., alias="X-CSRF-Token")
+):
+    """Send a test email to verify SMTP configuration. Requires authentication."""
+    body = await request.json()
+    to_email = body.get("email")
+    
+    if not to_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email address is required"
+        )
+    
+    result = send_test_email(to_email)
+    if result["success"]:
+        return {"status": "success", "message": result["message"]}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["error"]
+        )

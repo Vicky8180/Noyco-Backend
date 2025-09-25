@@ -109,6 +109,7 @@ class APIGatewaySettings(BaseSettings):
     # GOOGLE_CLOUD_PROJECT: Optional[str] = None
     # GOOGLE_CLOUD_LOCATION: str = "us-central1"
     # GOOGLE_HEALTHCARE_DATASET: Optional[str] = None
+    GOOGLE_CLIENT_ID: Optional[str] = None
     
     # Stripe
     STRIPE_SECRET_KEY: str
@@ -149,9 +150,11 @@ class APIGatewaySettings(BaseSettings):
     DEEPGRAM_API_KEY: Optional[str] 
     GOOGLE_API_KEY: Optional[str] 
     
-    # SMTP
-    SMTP_GMAIL_USER: Optional[str] 
-    SMTP_GMAIL_PASS: Optional[str] 
+    # SMTP - Zoho Mail Configuration
+    SMTP_ZOHO_USER: Optional[str] 
+    SMTP_ZOHO_PASS: Optional[str]
+    SMTP_HOST: Optional[str] = "smtp.zoho.in"  # Use region host if needed: smtp.zoho.eu, smtp.zoho.in
+    SMTP_PORT: Optional[int] = 465  # 465 (SSL) or 587 (STARTTLS)
     
     # Server Configuration
     SERVICE_NAME: str = "api-gateway"

@@ -436,6 +436,13 @@ class AuthController:
                 detail="User not found"
             )
 
+        # Check if user is an OAuth user (no password)
+        if not user.get("password_hash", "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot update password for OAuth accounts. Password changes are not supported for accounts that logged in via Google or other social providers."
+            )
+
         if not self.verify_password(request.current_password, user["password_hash"]):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
