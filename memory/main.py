@@ -280,7 +280,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logging.info("🛑 Shutting down Memory Service...")
     if redis_memory:
-        await redis_memory.redis.aclose()
+        await redis_memory.redis.close()
     if mongo_memory:
         mongo_memory.client.close()
     logging.info("✅ Memory Service shutdown complete")

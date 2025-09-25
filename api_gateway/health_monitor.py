@@ -162,20 +162,20 @@ class HealthMonitor:
         try:
             from redis.asyncio import Redis
             from redis.exceptions import RedisError
-            from urllib.parse import urlparse
             
-            parsed = urlparse(self.settings.REDIS_URL)
-            redis_client = Redis(
-                host=parsed.hostname or '127.0.0.1',
-                port=parsed.port or 6379,
-                db=0,
+            # Use Redis.from_url() for better URL parsing and authentication support
+            redis_client = Redis.from_url(
+                self.settings.REDIS_URL,
                 socket_connect_timeout=1,
-                socket_timeout=2
+                socket_timeout=2,
+                retry_on_timeout=True,
+                decode_responses=False
             )
             await asyncio.wait_for(redis_client.ping(), timeout=5.0)
             database_status["redis"] = {
                 "status": "healthy",
-                "connection": "active"
+                "connection": "active",
+                "url": self.settings.REDIS_URL.split('@')[-1] if '@' in self.settings.REDIS_URL else self.settings.REDIS_URL
             }
             await redis_client.close()
         except ImportError:
@@ -366,16 +366,22 @@ class HealthMonitor:
         try:
             from redis.asyncio import Redis
             from urllib.parse import urlparse
-            parsed = urlparse(self.settings.REDIS_URL)
-            redis_client = Redis(
-                host=parsed.hostname or '127.0.0.1',
-                port=parsed.port or 6379,
-                db=0,
+            
+            # Use Redis.from_url() for better URL parsing and authentication support
+            redis_client = Redis.from_url(
+                self.settings.REDIS_URL,
                 socket_connect_timeout=1,
-                socket_timeout=2
+                socket_timeout=2,
+                retry_on_timeout=True,
+                decode_responses=False
             )
             await asyncio.wait_for(redis_client.ping(), timeout=3.0)
-            print(f"✅ Redis                 - CONNECTED ({parsed.hostname}:{parsed.port})")
+            
+            # Extract host and port for display (hide credentials)
+            parsed = urlparse(self.settings.REDIS_URL)
+            display_host = parsed.hostname or 'localhost'
+            display_port = parsed.port or 6379
+            print(f"✅ Redis                 - CONNECTED ({display_host}:{display_port})")
             await redis_client.close()
         except Exception as e:
             print(f"❌ Redis                 - FAILED ({str(e)[:30]}...)")
