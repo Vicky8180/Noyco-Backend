@@ -24,7 +24,7 @@ steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy-api-gateway'
     waitFor: ['push-api-gateway']
-    entrypoint: 
+    entrypoint: gcloud
     timeout: 600s
     secretEnv: ['conversationalengine-secrets']
     args:
