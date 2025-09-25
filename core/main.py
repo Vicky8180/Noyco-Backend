@@ -8,6 +8,10 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .config import get_core_config
+
+# Get the config instance
+config = get_core_config()
 
 try:
     # Import the individual service applications
@@ -96,11 +100,13 @@ async def detailed_health_check():
     import asyncio
     from datetime import datetime
     
+    base_url = f"http://localhost:{config.port}"
+    
     services = {
-        "orchestrator": "http://localhost:8002/orchestrator/health",
-        "primary": "http://localhost:8002/primary/health", 
-        "checkpoint": "http://localhost:8002/checkpoint/health",
-        "checklist": "http://localhost:8002/checklist/health"
+        "orchestrator": f"{base_url}/orchestrator/health",
+        "primary": f"{base_url}/primary/health", 
+        "checkpoint": f"{base_url}/checkpoint/health",
+        "checklist": f"{base_url}/checklist/health"
     }
     
     async def check_service(name: str, url: str):
@@ -180,6 +186,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8002,  # Using the orchestrator's original port
+        port=config.port,  # Using the orchestrator's original port
         log_level="info"
     )
