@@ -9,14 +9,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
       - '-f'
       - 'memory/Dockerfile'
       - '.'
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-memory'
     waitFor: ['build-memory']
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA']
 
   # Build and push core service
   - name: 'gcr.io/cloud-builders/docker'
@@ -24,14 +24,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
       - '-f'
       - 'core/Dockerfile'
       - '.'
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-core-service'
     waitFor: ['build-core-service']
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA']
 
   # Build and push agents-specialist service
   - name: 'gcr.io/cloud-builders/docker'
@@ -39,14 +39,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
       - '-f'
       - 'specialists/agents/Dockerfile'
       - '.'
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-agents-specialist'
     waitFor: ['build-agents-specialist']
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA']
 
   # Build and push api-gateway service
   - name: 'gcr.io/cloud-builders/docker'
@@ -54,14 +54,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
       - '-f'
       - 'api_gateway/Dockerfile'
       - '.'
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-api-gateway'
     waitFor: ['build-api-gateway']
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA']
 
 
   # Deploy memory service
@@ -74,7 +74,7 @@ steps:
       - 'deploy'
       - 'conversationalengine-memory'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -104,7 +104,7 @@ steps:
       - 'deploy'
       - 'conversationalengine-core'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -132,7 +132,7 @@ steps:
       - 'deploy'
       - 'conversationalengine-agents-specialist'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -161,7 +161,7 @@ steps:
       - 'deploy'
       - 'conversationalengine-api-gateway'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -181,10 +181,10 @@ steps:
 
 # List all final images that will be available in Artifact Registry
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/core-service:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/agents-specialist-service:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/api-gateway-service:$COMMIT_SHA'
 
 # Use a more powerful machine type for faster parallel builds
 options:

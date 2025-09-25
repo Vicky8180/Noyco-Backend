@@ -9,7 +9,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
       - '-f'
       - 'memory/Dockerfile'
       - '.'
@@ -18,7 +18,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-memory'
     waitFor: ['build-memory']
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA']
 
   # Deploy memory service to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -30,7 +30,7 @@ steps:
       - 'deploy'
       - 'conversationalengine-memory'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -50,11 +50,11 @@ steps:
       - conversationalengine-secrets=conversationalengine-secrets:latest 
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/memory-service:$COMMIT_SHA'
 
 availableSecrets:
   secretManager:
-    - versionName: projects/194878370435/secrets/conversationalengine-secrets/versions/latest
+    - versionName: projects/562270549707/secrets/conversationalengine-secrets/versions/latest
       env: 'conversationalengine-secrets'
 
 options:
