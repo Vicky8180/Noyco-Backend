@@ -4,9 +4,26 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
 import time
-from common.models import Checkpoint
 
-from specialists.primary.agent import process_message
+try:
+    # Try relative imports first (when used as submodule)
+    from .agent import process_message
+    import_mode = "relative"
+except ImportError:
+    # Fallback to absolute imports (when run standalone)
+    if __name__ == "__main__" and __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+        from agent import process_message
+        import_mode = "standalone"
+    else:
+        from core.primary.agent import process_message
+        import_mode = "module"
+
+# Import common models - this is always at root level
+from common.models import Checkpoint
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,

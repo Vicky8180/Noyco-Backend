@@ -26,13 +26,25 @@ sys.path.insert(0, root_dir)
 try:
     from memory.redis_client import RedisMemory
     from memory.mongo_client import MongoMemory
-    # Import from unified schema
-    from ..schema import (
-        UserProfile, EmotionalCompanionAgent, EmotionalGoal, CheckIn, 
-        MoodLog, ProgressEntry, BaseDBModel, generate_emotional_goal_id
-    )
+    # Import from unified schema - try both relative and absolute paths
+    try:
+        # When running from agents folder
+        from schema import (
+            UserProfile, EmotionalCompanionAgent, EmotionalGoal, CheckIn, 
+            MoodLog, ProgressEntry, BaseDBModel, generate_emotional_goal_id
+        )
+    except ImportError:
+        # When running from root folder via run_dev.py
+        from specialists.agents.schema import (
+            UserProfile, EmotionalCompanionAgent, EmotionalGoal, CheckIn, 
+            MoodLog, ProgressEntry, BaseDBModel, generate_emotional_goal_id
+        )
+    
     # Import CheckpointState from local schema
-    from .schema import CheckpointState
+    try:
+        from emotional.schema import CheckpointState
+    except ImportError:
+        from specialists.agents.emotional.schema import CheckpointState
 except ImportError as e:
     logging.warning(f"Import error in emotional data manager: {e}. Using minimal fallback implementations.")
     import random

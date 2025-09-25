@@ -33,11 +33,19 @@ class RedisMemory:
 
     async def check_connection(self):
         try:
-            if await self.redis.ping():
-                logging.info("✅ Redis connected successfully")
-                return True
+            # Use asyncio.wait_for for more controlled timeout handling
+            await asyncio.wait_for(self.redis.ping(), timeout=2.0)
+            logging.debug("✅ Redis ping successful")
+            return True
+        except asyncio.TimeoutError:
+            logging.warning("⚠️ Redis connection timeout (server may be slow but functional)")
+            # Don't raise exception for timeout - Redis may still be working
+            return False
         except RedisError as e:
-            logging.critical(f"❌ Redis connection failed: {str(e)}")
+            logging.error(f"❌ Redis connection failed: {str(e)}")
+            raise
+        except Exception as e:
+            logging.error(f"❌ Unexpected Redis error: {str(e)}")
             raise
 
     async def set_conversation_state(self, conversation_id: str, state: Dict[str, Any]) -> None:

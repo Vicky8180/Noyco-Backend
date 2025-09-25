@@ -1,12 +1,13 @@
 # API Gateway Dockerfile
-FROM python:3.11-slim
+FROM python:3.13.7-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    SERVICE_PORT=8000
+    SERVICE_PORT=8000 \
+    PYTHONPATH=/app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -27,27 +28,37 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Copy requirements first for better caching
-COPY requirements3.txt .
+COPY api_gateway/requirements.txt ./requirements.txt
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements3.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy API Gateway application code
+COPY api_gateway/ ./api_gateway/
 
-# Create necessary directories
+# Copy common directory (shared models and utilities)
+COPY common/ ./common/
+
+# Copy keys generation script
+COPY generate_keys.py ./generate_keys.py
+
+# Copy startup script
+COPY api_gateway/startup.sh ./startup.sh
+
+# Create necessary directories and set permissions
 RUN mkdir -p /app/logs /app/keys && \
+    chmod +x /app/startup.sh && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Start the API Gateway
-CMD ["python", "-m", "uvicorn", "api_gateway.main:socket_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/startup.sh"]

@@ -1,4 +1,4 @@
-# File: specialists/checklist/main.py
+# File: core/checklist/main.py
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
@@ -7,7 +7,24 @@ import logging
 import json
 from datetime import datetime
 
-from specialists.checklist.agent import track_checkpoint_progress
+try:
+    # Try relative imports first (when used as submodule)
+    from .agent import track_checkpoint_progress
+    import_mode = "relative"
+except ImportError:
+    try:
+        # Fallback to absolute imports 
+        from core.checklist.agent import track_checkpoint_progress
+        import_mode = "absolute"
+    except ImportError:
+        # Last resort for standalone execution
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from core.checklist.agent import track_checkpoint_progress
+        import_mode = "standalone"
+
+# Import common models - this is always at root level
 from common.models import CheckpointType, CheckpointStatus, AgentResponseStatus, Checkpoint
 
 logging.basicConfig(level=logging.INFO)

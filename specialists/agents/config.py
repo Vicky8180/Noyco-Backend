@@ -1,5 +1,39 @@
+import os
+import logging
 from pydantic_settings import BaseSettings
 from typing import Optional
+from dotenv import load_dotenv
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def _load_production_secrets():
+    """
+    Loads secrets from a single environment variable in production.
+    If the variable is not found, it falls back to a local .env file.
+    """
+    # This is the environment variable you will set in Cloud Run
+    # Its value will be the entire content of your production .env file
+    secret_content = os.getenv("conversationalengine-secret")
+
+    if secret_content:
+        logger.info("✅ Production secrets found. Loading from environment.")
+        try:
+            # Parse the multi-line secret string and set environment variables
+            for line in secret_content.strip().split('\n'):
+                if '=' in line and not line.strip().startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    os.environ[key] = value
+            logger.info("✅ Environment variables set from production secrets.")
+        except Exception as e:
+            logger.error(f"❌ Failed to parse production secrets: {e}")
+    else:
+        logger.warning("⚠️ Production secrets not found. Falling back to local .env file.")
+        load_dotenv()
+
+# Run the loader function when this module is imported
+_load_production_secrets()
 
 class AgentsSettings(BaseSettings):
     # Environment
@@ -11,26 +45,13 @@ class AgentsSettings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     
     # API Keys
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
-    
-    # Google Cloud
-    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
-    GOOGLE_CLOUD_PROJECT: Optional[str] = None
-    GOOGLE_CLOUD_LOCATION: str = "us-central1"
-    GOOGLE_HEALTHCARE_DATASET: Optional[str] = None
-    
+
     # Engine choices
     LLM_ENGINE: str = "gemini-2.0-flash"
     DEFAULT_MODEL_NAME: str = "gemini-2.0-flash"
-    
-    # LLM Configuration
-    DEFAULT_MAX_TOKENS: int = 150
-    DEFAULT_TEMPERATURE: float = 0.7
-    DEFAULT_TOP_P: float = 0.8
-    DEFAULT_TOP_K: int = 20
-    STREAM_CHUNK_SIZE: int = 3
     
     # Service Configuration
     SERVICE_NAME: str = "agents"
@@ -38,15 +59,8 @@ class AgentsSettings(BaseSettings):
     AGENTS_SERVICE_PORT: int = 8015
     AGENTS_SERVICE_HOST: str = "0.0.0.0"
     
-    # Service URLs (for cross-service communication)
-    LONELINESS_SERVICE_URL: Optional[str] = "http://localhost:8015/loneliness/process"
-    ACCOUNTABILITY_SERVICE_URL: Optional[str] = "http://localhost:8015/accountability/process"
-    THERAPY_SERVICE_URL: Optional[str] = "http://localhost:8015/therapy/process"
-    EMOTIONAL_SERVICE_URL: Optional[str] = "http://localhost:8015/emotional/process"
-    ANXIETY_SERVICE_URL: Optional[str] = "http://localhost:8015/anxiety/process"
-    
     class Config:
-        env_file = ".env"
+        # env_file = ".env"
         case_sensitive = True
         extra = "allow"  # Allow extra fields from .env that this service doesn't use
 

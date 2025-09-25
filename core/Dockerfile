@@ -1,12 +1,13 @@
-# Checklist Specialist Service Dockerfile
-FROM python:3.11-slim
+# Core Service Dockerfile
+FROM python:3.13.7-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    SERVICE_PORT=8007
+    SERVICE_PORT=8002 \
+    PYTHONPATH=/app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -27,15 +28,18 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Copy requirements first for better caching
-COPY requirements3.txt .
+COPY core/requirements.txt ./requirements.txt
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements3.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy Core Service application code
+COPY core/ ./core/
 
-# Create necessary directories
+# Copy common directory (shared models and utilities)
+COPY common/ ./common/
+
+# Create necessary directories and set permissions
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
@@ -43,11 +47,11 @@ RUN mkdir -p /app/logs && \
 USER appuser
 
 # Expose port
-EXPOSE 8007
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8007/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Start the Checklist Specialist service
-CMD ["python", "-m", "uvicorn", "specialists.checklist.main:app", "--host", "0.0.0.0", "--port", "8007"]
+# Start the Core Service
+CMD ["python", "-m", "uvicorn", "core.main:app", "--host", "0.0.0.0", "--port", "8080"]

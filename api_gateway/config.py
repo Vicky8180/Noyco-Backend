@@ -1,5 +1,39 @@
+import os
+import logging
 from pydantic_settings import BaseSettings
 from typing import Optional
+from dotenv import load_dotenv
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def _load_production_secrets():
+    """
+    Loads secrets from a single environment variable in production.
+    If the variable is not found, it falls back to a local .env file.
+    """
+    # This is the environment variable you will set in Cloud Run
+    # Its value will be the entire content of your production .env file
+    secret_content = os.getenv("conversationalengine-secret")
+
+    if secret_content:
+        logger.info("✅ Production secrets found. Loading from environment.")
+        try:
+            # Parse the multi-line secret string and set environment variables
+            for line in secret_content.strip().split('\n'):
+                if '=' in line and not line.strip().startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    os.environ[key] = value
+            logger.info("✅ Environment variables set from production secrets.")
+        except Exception as e:
+            logger.error(f"❌ Failed to parse production secrets: {e}")
+    else:
+        logger.warning("⚠️ Production secrets not found. Falling back to local .env file.")
+        load_dotenv()
+
+# Run the loader function when this module is imported
+_load_production_secrets()
 
 class APIGatewaySettings(BaseSettings):
     # Environment
@@ -29,11 +63,32 @@ class APIGatewaySettings(BaseSettings):
     REDIS_URL: str 
     
     # Service URLs
-    ORCHESTRATOR_URL: str = "http://localhost:8002"
-    ORCHESTRATOR_ENDPOINT: str = "http://localhost:8002/orchestrate"
-    MEMORY_URL: str = "http://localhost:8010"
-    DETECTOR_URL: str = "http://localhost:8014"
-    CHECKPOINT_URL: str = "http://localhost:8003"
+    ORCHESTRATOR_URL: str
+    MEMORY_URL: str 
+    CHECKPOINT_URL: str
+    DETECTOR_URL: Optional[str] = None
+    PRIMARY_SERVICE_URL: str
+    
+    # Agent Service URLs
+    CHECKLIST_SERVICE_URL: str
+    PRIVACY_SERVICE_URL: Optional[str] = None
+    NUTRITION_SERVICE_URL: Optional[str] = None
+    FOLLOWUP_SERVICE_URL: Optional[str] = None
+    HISTORY_SERVICE_URL: Optional[str] = None
+    HUMAN_INTERVENTION_SERVICE_URL: Optional[str] = None
+    MEDICATION_SERVICE_URL: Optional[str] = None
+    
+    # Specialized Agent Services
+    LONELINESS_SERVICE_URL: str
+    ACCOUNTABILITY_SERVICE_URL: str
+    THERAPY_SERVICE_URL: str
+    EMOTIONAL_SERVICE_URL: Optional[str] = None
+    ANXIETY_SERVICE_URL: Optional[str] = None
+    
+    # Service Port Configuration (for health checks)
+    PRIMARY_SERVICE_PORT: Optional[int] = 8002
+    CHECKLIST_SERVICE_PORT: Optional[int] = 8002
+    AGENTS_SERVICE_PORT: Optional[int] = 8015
     
     # CORS settings
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -159,7 +214,7 @@ class APIGatewaySettings(BaseSettings):
     DEFAULT_CALL_LOG_ID: str = "call_log_livekit"
     
     class Config:
-        env_file = ".env"
+        # env_file = ".env"
         case_sensitive = True
         extra = "allow"  # Allow extra fields from .env that this service doesn't use
 

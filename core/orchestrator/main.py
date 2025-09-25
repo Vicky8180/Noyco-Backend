@@ -17,26 +17,8 @@ from fastapi import FastAPI, HTTPException, Response, BackgroundTasks, status, D
 # from urllib.parse import urlparse
 
 # Import local modules - Only keeping what we need
-if __name__ == "__main__" and __package__ is None:
-    import sys
-    from os import path
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-
-    from orchestrator.models import OrchestratorQuery, OrchestratorResponse
-    from orchestrator.timing import TimingMetrics
-    from orchestrator.config import get_settings
-    from orchestrator.services import (
-        call_checklist_service,
-        call_service, 
-        http_client, 
-        ensure_http_client
-    )
-    from orchestrator.utils import get_conversation_state
-    from orchestrator.state_manager import cache_manager
-    import orchestrator.services
-    from common.models import Task
-else:
-
+try:
+    # Try relative imports first (when used as submodule)
     from .models import OrchestratorQuery, OrchestratorResponse
     from .timing import TimingMetrics
     from .config import get_settings
@@ -48,7 +30,43 @@ else:
     )
     from .utils import get_conversation_state
     from .state_manager import cache_manager
-    from common.models import Task
+    import_mode = "relative"
+except ImportError:
+    # Fallback to absolute imports (when run standalone)
+    if __name__ == "__main__" and __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+        from orchestrator.models import OrchestratorQuery, OrchestratorResponse
+        from orchestrator.timing import TimingMetrics
+        from orchestrator.config import get_settings
+        from orchestrator.services import (
+            call_checklist_service,
+            call_service, 
+            http_client, 
+            ensure_http_client
+        )
+        from orchestrator.utils import get_conversation_state
+        from orchestrator.state_manager import cache_manager
+        import orchestrator.services
+        import_mode = "standalone"
+    else:
+        from .models import OrchestratorQuery, OrchestratorResponse
+        from .timing import TimingMetrics
+        from .config import get_settings
+        from .services import (
+            call_checklist_service,
+            call_service, 
+            http_client, 
+            ensure_http_client
+        )
+        from .utils import get_conversation_state
+        from .state_manager import cache_manager
+        import_mode = "module"
+
+# Import common models - this is always at root level
+from common.models import Task
 
 import uvicorn
 
@@ -91,11 +109,14 @@ async def lifespan(app: FastAPI):
     _logger.debug("HTTP client initialized with optimized settings")
 
     # Export the http_client to the services module
-    if __name__ == "__main__" and __package__ is None:
-        orchestrator.services.http_client = http_client
-    else:
-        from . import services
-        services.http_client=http_client
+    try:
+        if import_mode == "standalone":
+            orchestrator.services.http_client = http_client
+        else:
+            from . import services
+            services.http_client = http_client
+    except:
+        pass  # Graceful fallback if services module not available
         
     ensure_http_client()
 

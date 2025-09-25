@@ -35,15 +35,23 @@ def _load_production_secrets():
 # Run the loader function when this module is imported
 _load_production_secrets()
 
-class Settings(BaseSettings):
+class CheckpointSettings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
+    
+    # API Keys - Required for checkpoint generation
     GEMINI_API_KEY: str
-
+    
+    # Service Configuration
+    SERVICE_NAME: str = "checkpoint"
+    SERVICE_VERSION: str = "1.0.0"
+    SERVICE_PORT: int = 8003
+    SERVICE_HOST: str = "0.0.0.0"
+    
     class Config:
         # env_file = ".env"
         case_sensitive = True
-        extra = "allow"  # Allow extra fields from .env that this service doesn't use
+        extra = "ignore"  # Ignore extra fields from .env file
 
-def get_settings() -> Settings:
-    return Settings()
+def get_settings() -> CheckpointSettings:
+    return CheckpointSettings()

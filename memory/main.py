@@ -23,12 +23,12 @@ if __name__ == "__main__" and __package__ is None:
     from os import path
     sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
     from memory.redis_client import RedisMemory
-    from memory.pinecone_client import PineconeMemory
+    # from memory.pinecone_client import PineconeMemory
     from memory.mongo_client import MongoMemory
     from memory.config import get_settings
 else:
     from .redis_client import RedisMemory
-    from .pinecone_client import PineconeMemory
+    # from .pinecone_client import PineconeMemory
     from .mongo_client import MongoMemory
     from .config import get_settings
 
@@ -236,13 +236,78 @@ class VerificationRequest(OptimizedBaseModel):
     conversation_id: str = Field(..., min_length=1, max_length=100)
     is_verified: bool = False
 
+# ============= LIFESPAN CONTEXT MANAGER =============
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    global redis_memory, pinecone_memory, mongo_memory
+    
+    logging.info("🚀 Starting Memory Service...")
+    
+    # Initialize critical services first with settings
+    redis_memory = RedisMemory(redis_url=settings.REDIS_URL)
+    mongo_memory = MongoMemory(uri=settings.MONGODB_URI, db_name=settings.DATABASE_NAME)
+
+    # Initialize core services (Redis and MongoDB)
+    startup_tasks = []
+    
+    # Redis initialization
+    try:
+        await redis_memory.check_connection()
+        logging.info("✅ Redis connected successfully")
+        health_checker.redis_healthy = True
+    except Exception as e:
+        logging.warning(f"⚠️ Redis connection failed: {e}")
+        health_checker.redis_healthy = False
+
+    # MongoDB initialization  
+    try:
+        await mongo_memory.check_connection()
+        logging.info("✅ MongoDB connected successfully")
+        health_checker.mongo_healthy = True
+    except Exception as e:
+        logging.warning(f"⚠️ MongoDB connection failed: {e}")
+        health_checker.mongo_healthy = False
+
+    # Initialize Pinecone in background (non-critical)
+    asyncio.create_task(init_pinecone_background())
+    
+    logging.info("✅ Memory Service startup complete")
+    
+    yield
+    
+    # Shutdown
+    logging.info("🛑 Shutting down Memory Service...")
+    if redis_memory:
+        await redis_memory.redis.aclose()
+    if mongo_memory:
+        mongo_memory.client.close()
+    logging.info("✅ Memory Service shutdown complete")
+
+async def init_pinecone_background():
+    global pinecone_memory
+    try:
+        # pinecone_memory = PineconeMemory(
+        #     api_key=settings.PINECONE_API_KEY,
+        #     environment=settings.PINECONE_ENVIRONMENT
+        # )
+        await pinecone_memory.check_connection()
+        health_checker.pinecone_healthy = True
+        logging.info("✅ Pinecone initialized successfully")
+    except Exception as e:
+        logging.warning(f"⚠️ Pinecone initialization failed: {e}")
+        health_checker.pinecone_healthy = False
+        pinecone_memory = None
+
 # ============= OPTIMIZED FASTAPI APP =============
 
-logging.basicConfig(level=logging.WARNING)  # Reduce logging overhead
+logging.basicConfig(level=logging.INFO)  # Use INFO level to show connection status
 app = FastAPI(
     title="Memory Service - Optimized",
     docs_url="/docs" if __name__ == "__main__" else None,  # Disable docs in production
-    redoc_url=None  # Disable redoc
+    redoc_url=None,  # Disable redoc
+    lifespan=lifespan  # Use modern lifespan instead of deprecated on_event
 )
 
 # Add performance middleware
@@ -257,7 +322,7 @@ app.add_middleware(
 
 # Global connections
 redis_memory: RedisMemory = None
-pinecone_memory: PineconeMemory = None
+pinecone_memory = None
 mongo_memory: MongoMemory = None
 
 # Connection pool and health check
@@ -276,18 +341,26 @@ class HealthChecker:
 
         self.last_check = current_time
 
-        # Check Redis
+        # Check Redis with better error handling
         try:
-            await redis_memory.check_connection()
-            self.redis_healthy = True
-        except:
+            if redis_memory:
+                result = await redis_memory.check_connection()
+                self.redis_healthy = result if result is not None else self.redis_healthy
+            else:
+                self.redis_healthy = False
+        except Exception as e:
+            logging.debug(f"Redis health check failed: {e}")
             self.redis_healthy = False
 
         # Check MongoDB
         try:
-            await mongo_memory.check_connection()
-            self.mongo_healthy = True
-        except:
+            if mongo_memory:
+                await mongo_memory.check_connection()
+                self.mongo_healthy = True
+            else:
+                self.mongo_healthy = False
+        except Exception as e:
+            logging.debug(f"MongoDB health check failed: {e}")
             self.mongo_healthy = False
 
         # Check Pinecone
@@ -295,49 +368,15 @@ class HealthChecker:
             if pinecone_memory:
                 await pinecone_memory.check_connection()
                 self.pinecone_healthy = True
-        except:
+            else:
+                self.pinecone_healthy = False
+        except Exception as e:
+            logging.debug(f"Pinecone health check failed: {e}")
             self.pinecone_healthy = False
 
 health_checker = HealthChecker()
 
 # ============= OPTIMIZED ENDPOINTS =============
-
-@app.on_event("startup")
-async def startup_event():
-    global redis_memory, pinecone_memory, mongo_memory
-
-    # Initialize critical services first with settings
-    redis_memory = RedisMemory(redis_url=settings.REDIS_URL)
-    mongo_memory = MongoMemory(uri=settings.MONGODB_URI, db_name=settings.DATABASE_NAME)
-
-    # Parallel initialization for speed
-    tasks = [
-        redis_memory.check_connection(),
-        mongo_memory.check_connection()
-    ]
-
-    try:
-        await asyncio.gather(*tasks, return_exceptions=True)
-        logging.info("✅ Connected to Redis and MongoDB")
-    except Exception as e:
-        logging.error(f"Critical service initialization failed: {e}")
-        raise
-
-    # Initialize Pinecone in background (non-critical)
-    asyncio.create_task(init_pinecone_background())
-
-async def init_pinecone_background():
-    global pinecone_memory
-    try:
-        pinecone_memory = PineconeMemory(
-            api_key=settings.PINECONE_API_KEY,
-            environment=settings.PINECONE_ENVIRONMENT
-        )
-        await pinecone_memory.check_connection()
-        logging.info("✅ Pinecone initialized")
-    except Exception as e:
-        logging.warning(f"⚠️ Pinecone initialization failed: {e}")
-        pinecone_memory = None
 
 # Ultra-fast state saving with caching
 @app.post("/conversation/state")
@@ -776,7 +815,7 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=settings.SERVICE_PORT,
+        port=8010,
         workers=1,  # Single worker for optimal caching
         loop="asyncio",  # Use standard asyncio instead of uvloop
         http="h11",  # Use standard h11 instead of httptools

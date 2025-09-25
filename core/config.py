@@ -1,6 +1,10 @@
+"""
+Core Service Configuration
+Handles configuration for the consolidated core service
+"""
+
 import os
 import logging
-from pydantic_settings import BaseSettings
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -35,15 +39,21 @@ def _load_production_secrets():
 # Run the loader function when this module is imported
 _load_production_secrets()
 
-class Settings(BaseSettings):
-    # Environment
-    ENVIRONMENT: str = "development"
-    GEMINI_API_KEY: str
+class CoreConfig:
+    """Configuration for the core service"""
+    
+    def __init__(self):
+        self.host = os.getenv('CORE_SERVICE_HOST', '0.0.0.0')
+        self.port = int(os.getenv('CORE_SERVICE_PORT', '8002'))
+        self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+        
+        # Service-specific configurations
+        self.orchestrator_enabled = os.getenv('ORCHESTRATOR_ENABLED', 'true').lower() == 'true'
+        self.primary_enabled = os.getenv('PRIMARY_ENABLED', 'true').lower() == 'true'
+        self.checkpoint_enabled = os.getenv('CHECKPOINT_ENABLED', 'true').lower() == 'true'
+        self.checklist_enabled = os.getenv('CHECKLIST_ENABLED', 'true').lower() == 'true'
 
-    class Config:
-        # env_file = ".env"
-        case_sensitive = True
-        extra = "allow"  # Allow extra fields from .env that this service doesn't use
 
-def get_settings() -> Settings:
-    return Settings()
+def get_core_config() -> CoreConfig:
+    """Get core service configuration"""
+    return CoreConfig()

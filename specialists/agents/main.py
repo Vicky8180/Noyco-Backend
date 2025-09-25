@@ -12,14 +12,26 @@ import uvicorn
 import time
 import json
 import asyncio
-from common.models import Checkpoint
 
 # Import agent processors
-from .accountability.accountability_agent_v2 import AccountabilityAgentV2
-from .emotional.emotional_companion_agent import process_message as emotional_process
-from .anxiety.anxiety_agent import process_message as anxiety_process
-from .therapy.therapy_agent import process_message as therapy_process
-from .loneliness.loneliness_agent import process_message as loneliness_process
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+    from accountability.accountability_agent_v2 import AccountabilityAgentV2
+    from emotional.emotional_companion_agent import process_message as emotional_process
+    from anxiety.anxiety_agent import process_message as anxiety_process
+    from therapy.therapy_agent import process_message as therapy_process
+    from loneliness.loneliness_agent import process_message as loneliness_process
+else:
+    from .accountability.accountability_agent_v2 import AccountabilityAgentV2
+    from .emotional.emotional_companion_agent import process_message as emotional_process
+    from .anxiety.anxiety_agent import process_message as anxiety_process
+    from .therapy.therapy_agent import process_message as therapy_process
+    from .loneliness.loneliness_agent import process_message as loneliness_process
+
+from common.models import Checkpoint
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
