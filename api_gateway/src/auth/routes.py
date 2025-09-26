@@ -512,6 +512,24 @@ async def onboarding_status(
         {"id": current_user.role_entity_id}, {"_id": 0, "onboarding_completed": 1}
     ) or {}
     completed = bool(doc.get("onboarding_completed", False))
+    
+    # Fallback: If flag is not set but user has profiles, consider onboarding completed
+    if not completed:
+        profile_count = auth_controller.db.user_profiles.count_documents(
+            {"role_entity_id": current_user.role_entity_id}
+        )
+        if profile_count > 0:
+            completed = True
+            # Auto-update the onboarding flag for consistency
+            try:
+                auth_controller.db.individuals.update_one(
+                    {"id": current_user.role_entity_id}, 
+                    {"$set": {"onboarding_completed": True}}
+                )
+                print(f"Auto-updated onboarding flag for user {current_user.role_entity_id} with existing profiles")
+            except Exception as e:
+                print(f"Warning: Failed to auto-update onboarding flag: {e}")
+    
     return {"onboarding_completed": completed}
 
 
