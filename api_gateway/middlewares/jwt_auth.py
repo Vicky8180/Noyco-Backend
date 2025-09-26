@@ -3,6 +3,7 @@ from typing import Dict, Optional, Any
 import secrets
 from datetime import datetime, timedelta
 import uuid
+import logging
 from jose import jwt, JWTError
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -55,11 +56,33 @@ class JWTAuthController:
         self.secure_cookie = self.settings.COOKIE_SECURE
         self.cookie_domain = self.settings.COOKIE_DOMAIN
         self.cookie_samesite = self.settings.COOKIE_SAMESITE
+        
+        # CSRF-specific cookie settings
+        self.csrf_cookie_secure = self.settings.CSRF_COOKIE_SECURE
+        self.csrf_cookie_httponly = self.settings.CSRF_COOKIE_HTTPONLY
+        
+        # Validate SameSite settings - if secure=False, SameSite cannot be None
+        if self.cookie_samesite.lower() == "none" and not self.secure_cookie:
+            self.cookie_samesite = "lax"  # Fallback to lax for non-secure cookies
+            
+        # Same validation for CSRF cookie
+        if self.cookie_samesite.lower() == "none" and not self.csrf_cookie_secure:
+            # For CSRF, if it's not secure but regular cookies are, use lax
+            self.csrf_cookie_samesite = "lax"
+        else:
+            self.csrf_cookie_samesite = self.cookie_samesite
 
         # Cookie names from config
         self.access_token_cookie = self.settings.JWT_ACCESS_TOKEN_COOKIE_NAME
         self.refresh_token_cookie = self.settings.JWT_REFRESH_TOKEN_COOKIE_NAME
         self.csrf_cookie_name = self.settings.JWT_CSRF_COOKIE_NAME
+
+        # Log cookie configuration for debugging
+        logger = logging.getLogger(__name__)
+        logger.info("🍪 Cookie Configuration:")
+        logger.info(f"   Domain: {self.cookie_domain}")
+        logger.info(f"   General Secure: {self.secure_cookie}, SameSite: {self.cookie_samesite}")
+        logger.info(f"   CSRF Secure: {self.csrf_cookie_secure}, HttpOnly: {self.csrf_cookie_httponly}, SameSite: {self.csrf_cookie_samesite}")
 
         # Token blocklist (shared across instances)
         self._token_blocklist = JWTAuthController._token_blocklist_global
@@ -332,13 +355,13 @@ class JWTAuthController:
             path="/"
         )
 
-        # CSRF token cookie - accessible to JavaScript
+        # CSRF token cookie - using dedicated CSRF cookie settings
         response.set_cookie(
             key=self.csrf_cookie_name,
             value=csrf_token,
-            httponly=False,
-            secure=self.secure_cookie,
-            samesite=self.cookie_samesite,
+            httponly=self.csrf_cookie_httponly,
+            secure=self.csrf_cookie_secure,
+            samesite=self.csrf_cookie_samesite,
             domain=self.cookie_domain,
             max_age=self.access_token_expire_minutes * 60,
             path="/"
@@ -368,7 +391,7 @@ class JWTAuthController:
             key=self.csrf_cookie_name,
             path="/",
             domain=self.cookie_domain,
-            secure=self.secure_cookie
+            secure=self.csrf_cookie_secure
         )
 
     def get_current_user(self, request: Request) -> JWTClaims:
