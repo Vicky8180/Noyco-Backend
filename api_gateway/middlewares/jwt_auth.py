@@ -53,6 +53,8 @@ class JWTAuthController:
 
         # Cookie settings from config
         self.secure_cookie = self.settings.COOKIE_SECURE
+        self.cookie_domain = self.settings.COOKIE_DOMAIN
+        self.cookie_samesite = self.settings.COOKIE_SAMESITE
 
         # Cookie names from config
         self.access_token_cookie = self.settings.JWT_ACCESS_TOKEN_COOKIE_NAME
@@ -312,7 +314,8 @@ class JWTAuthController:
             value=access_token,
             httponly=True,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.cookie_samesite,
+            domain=self.cookie_domain,
             max_age=self.access_token_expire_minutes * 60,
             path="/"
         )
@@ -323,7 +326,8 @@ class JWTAuthController:
             value=refresh_token,
             httponly=True,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.cookie_samesite,
+            domain=self.cookie_domain,
             max_age=self.refresh_token_expire_days * 24 * 60 * 60,
             path="/"
         )
@@ -334,7 +338,8 @@ class JWTAuthController:
             value=csrf_token,
             httponly=False,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.cookie_samesite,
+            domain=self.cookie_domain,
             max_age=self.access_token_expire_minutes * 60,
             path="/"
         )
@@ -346,6 +351,7 @@ class JWTAuthController:
         response.delete_cookie(
             key=self.access_token_cookie,
             path="/",
+            domain=self.cookie_domain,
             secure=self.secure_cookie,
             httponly=True
         )
@@ -353,6 +359,7 @@ class JWTAuthController:
         response.delete_cookie(
             key=self.refresh_token_cookie,
             path="/",
+            domain=self.cookie_domain,
             secure=self.secure_cookie,
             httponly=True
         )
@@ -360,6 +367,7 @@ class JWTAuthController:
         response.delete_cookie(
             key=self.csrf_cookie_name,
             path="/",
+            domain=self.cookie_domain,
             secure=self.secure_cookie
         )
 
