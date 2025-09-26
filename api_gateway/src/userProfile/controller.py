@@ -138,6 +138,18 @@ class UserProfileController:
         # Convert ObjectIds and remove _id
         profile_dict = self._convert_objectid_to_str(profile_dict)
 
+        # Mark onboarding as completed since user has successfully created their profile
+        # This prevents the infinite redirect loop in the frontend
+        try:
+            self.db.individuals.update_one(
+                {"id": role_entity_id}, 
+                {"$set": {"onboarding_completed": True}}
+            )
+            print(f"DEBUG - Marked onboarding as completed for user {role_entity_id}")
+        except Exception as e:
+            print(f"WARNING - Failed to mark onboarding as completed: {e}")
+            # Don't fail the profile creation if this update fails
+
         return {
             "user_profile_id": user_profile_id,
             "role_entity_id": role_entity_id,
