@@ -49,6 +49,8 @@ class LiveKitVoiceSettings(BaseSettings):
     CONNECTION_TIMEOUT: int = 30
     RESPONSE_TIMEOUT: int = 10
 
+    SERVICE_PORT: int = 8000
+
     # Use new model_config if available (pydantic v2)
     if SettingsConfigDict is not None:
         model_config = SettingsConfigDict(extra="allow", case_sensitive=False)

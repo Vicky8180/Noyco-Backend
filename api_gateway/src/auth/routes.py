@@ -250,7 +250,7 @@ async def google_login(request: Request, response: Response):
 
         # Add CORS headers explicitly for Google auth
         origin = request.headers.get("origin")
-        if origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+        if origin in ["http://localhost:3000", "http://127.0.0.1:3000", "https://www.noyco.com"]:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
 

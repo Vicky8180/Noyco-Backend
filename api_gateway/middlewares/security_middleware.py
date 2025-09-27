@@ -23,7 +23,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data:",
             "font-src 'self'",
             # Allow websocket / http calls during development
-            "connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:8000 wss://localhost:8000",
+            "connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:8000 wss://localhost:8000 https://www.noyco.com ws://api.noyco.com wss://api.noyco.com",
         ]
 
         # Only disallow embedding for non-widget pages
@@ -71,7 +71,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if "Access-Control-Allow-Origin" not in response.headers:
             # Only add if not already set by CORS middleware
             origin = request.headers.get("Origin")
-            if origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+            if origin in ["http://localhost:3000", "http://127.0.0.1:3000", "https://www.noyco.com"]:
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Credentials"] = "true"
         

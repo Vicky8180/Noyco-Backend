@@ -90,7 +90,7 @@ async def send_to_intent_detector(message: str, conversation_history: list, user
         logger.info(f"Sending to intent detector with {len(conversation_history)} context messages")
         
         async with aiohttp.ClientSession() as session:
-            async with session.post("http://localhost:8000/initial/chat", json=payload) as response:
+            async with session.post(f"http://localhost:{settings.SERVICE_PORT}/initial/chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
                     logger.info(f"Intent detector response: {result}")
@@ -139,7 +139,7 @@ async def create_goal_based_on_intent(detected_intent: str, user_profile_id: str
         
         # Create goal via API
         async with aiohttp.ClientSession() as session:
-            url = f"http://localhost:8000/user-profile/goals/{endpoint_type}/{user_profile_id}"
+            url = f"http://localhost:{settings.SERVICE_PORT}/user-profile/goals/{endpoint_type}/{user_profile_id}"
             
             async with session.put(url, json=goal_data) as response:
                 if response.status in [200, 201]:
