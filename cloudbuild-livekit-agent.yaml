@@ -40,7 +40,7 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--memory'
-      - '512Mi' 
+      - '1Gi' 
       - '--cpu'
       - '1'
       - '--max-instances'
