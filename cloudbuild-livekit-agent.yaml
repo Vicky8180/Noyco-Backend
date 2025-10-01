@@ -49,6 +49,7 @@ steps:
       - '1' 
       - '--timeout'
       - '3600'
+      - '--no-cpu-throttling'
       - '--update-secrets'
       - conversationalengine-secrets=conversationalengine-secrets:latest
 
