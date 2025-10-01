@@ -12,5 +12,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy only the agent's application code into the container
 COPY livekit-agent/ .
 
-# Command to run the agent when the container starts
-CMD ["python", "-u", "main.py", "start"]
+# Make startup script executable
+RUN chmod +x startup.sh
+
+# Expose the port that Cloud Run expects
+EXPOSE 8080
+
+# Set environment variable for PORT (Cloud Run will override this)
+ENV PORT=8080
+
+# Command to run the agent server with health check endpoint
+CMD ["python", "-u", "server.py"]
