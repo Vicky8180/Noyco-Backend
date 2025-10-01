@@ -55,6 +55,9 @@ class LiveKitAgentSettings(BaseSettings):
     # Text-to-Speech (ElevenLabs)
     ELEVENLABS_API_KEY: Optional[str] = None
     
+    # Text-to-Speech Fallback (Cartesia)
+    CARTESIA_API_KEY: Optional[str] = None
+    
     # Google API (if needed for additional services)
     GOOGLE_API_KEY: Optional[str] = None
     

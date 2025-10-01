@@ -2,6 +2,7 @@ livekit>=0.12.0
 livekit-agents>=0.12.0
 livekit-plugins-deepgram
 livekit-plugins-elevenlabs  
+livekit-plugins-cartesia  # TTS fallback
 livekit-plugins-google
 livekit-plugins-silero
 livekit-plugins-turn-detector>=0.2.0  # Advanced turn detection

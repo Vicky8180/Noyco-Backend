@@ -21,7 +21,7 @@ from livekit.agents import (
     StopResponse,
     utils,
 )
-from livekit.plugins import deepgram, elevenlabs, silero
+from livekit.plugins import deepgram, elevenlabs, silero, cartesia
 
 from config import get_settings
 
@@ -46,9 +46,16 @@ class NoycoAssistant(Agent):
         self.ws_connected = False
         self.ws_lock = asyncio.Lock()
         self.audio_source = None  # For typing sound playback
+        self._room_instance = None  # Store room for data channel access
         
-        # Get ElevenLabs API key from settings
+        # Get API keys from settings
         elevenlabs_key = settings.ELEVENLABS_API_KEY
+        cartesia_key = settings.CARTESIA_API_KEY
+        
+        # Store TTS fallback configuration
+        self.primary_tts = cartesia.TTS(api_key=cartesia_key) if cartesia_key else None
+        self.fallback_tts = elevenlabs.TTS(api_key=elevenlabs_key) if elevenlabs_key else None
+        self.use_fallback_tts = False
         
         # Initialize the base Agent
         super().__init__(
@@ -60,8 +67,7 @@ class NoycoAssistant(Agent):
                 smart_format=settings.STT_SMART_FORMAT,          # Better punctuation and formatting
                 punctuate=settings.STT_PUNCTUATE,                # Add punctuation
             ),
-            llm=elevenlabs.TTS(api_key=elevenlabs_key),
-            tts=elevenlabs.TTS(api_key=elevenlabs_key),
+            tts=self.primary_tts if self.primary_tts else self.fallback_tts,
         )
         
         logger.info(f"✅ NoycoAssistant initialized for session: {session_data.get('session_id')}")
@@ -123,6 +129,71 @@ class NoycoAssistant(Agent):
                     self.websocket = None
                     self.ws_connected = False
     
+    async def _send_message_to_frontend(self, text: str, sender: str):
+        """Send message to frontend via LiveKit data channel"""
+        try:
+            # Check if we have access to the room
+            if not hasattr(self, '_room_instance') or self._room_instance is None:
+                logger.warning(f"Cannot send message - room not available yet")
+                return
+            
+            message_data = {
+                "type": "message",
+                "sender": sender,
+                "text": text,
+                "timestamp": asyncio.get_event_loop().time()
+            }
+            
+            # Send via data channel using room instance
+            data_packet = json.dumps(message_data).encode('utf-8')
+            await self._room_instance.local_participant.publish_data(
+                data_packet,
+                reliable=True
+            )
+            logger.info(f"✅ Message sent to frontend: {sender} - {text[:50]}...")
+        except Exception as e:
+            logger.error(f"❌ Error sending message to frontend: {e}", exc_info=True)
+    
+    async def _speak_with_fallback(self, text: str):
+        """Speak text with TTS fallback mechanism"""
+        try:
+            # Try primary TTS (ElevenLabs)
+            if not self.use_fallback_tts and self.primary_tts:
+                try:
+                    self.session.say(text)
+                    logger.info("✅ Speech generated with ElevenLabs")
+                except Exception as primary_error:
+                    logger.warning(f"Primary TTS (ElevenLabs) failed: {primary_error}")
+                    
+                    # Switch to fallback if available
+                    if self.fallback_tts:
+                        logger.info("🔄 Switching to Cartesia TTS fallback...")
+                        self.use_fallback_tts = True
+                        # Update agent's TTS
+                        self.tts = self.fallback_tts
+                        # Try speaking with fallback
+                        try:
+                            self.session.say(text)
+                            logger.info("✅ Speech generated with Cartesia (fallback)")
+                        except Exception as fallback_error:
+                            logger.error(f"Fallback TTS (Cartesia) also failed: {fallback_error}")
+                            # Message already sent to frontend, so user can still read it
+                    else:
+                        logger.error("No fallback TTS available")
+            # Use fallback TTS if already switched
+            elif self.use_fallback_tts and self.fallback_tts:
+                try:
+                    self.session.say(text)
+                    logger.info("✅ Speech generated with Cartesia (fallback)")
+                except Exception as e:
+                    logger.error(f"Fallback TTS failed: {e}")
+            else:
+                logger.error("No TTS available")
+                
+        except Exception as e:
+            logger.error(f"Error in speak_with_fallback: {e}")
+            # Message still sent to frontend via data channel
+    
     async def _send_typing_indicator(self):
         """Send typing indicator to indicate processing (visual feedback if supported)"""
         try:
@@ -156,6 +227,11 @@ class NoycoAssistant(Agent):
         logger.info(f"🗣️ User said: '{user_text}'")
         logger.info("⏳ Processing response...")
         
+        # Send user's message to frontend
+        await self._send_message_to_frontend(user_text, "user")
+        
+        response_text = None
+        
         try:
             # Start typing indicator in background
             typing_task = asyncio.create_task(self._send_typing_indicator())
@@ -178,17 +254,23 @@ class NoycoAssistant(Agent):
                 except:
                     pass
             
-            if response_text and response_text.strip():
-                logger.info(f"⬅️ Backend response: {response_text[:100]}...")
-                # Use session.say() to speak the response
-                self.session.say(response_text)
-            else:
+            if not response_text or not response_text.strip():
                 logger.warning("Empty response from backend")
-                self.session.say("I'm processing that. Could you tell me more?")
+                response_text = "I'm processing that. Could you tell me more?"
         
         except Exception as e:
             logger.error(f"Error getting backend response: {e}", exc_info=True)
-            self.session.say("I'm having trouble right now. Could you try again?")
+            response_text = "I'm having trouble right now. Could you try again?"
+        
+        # Always send the message via WebSocket/HTTP, even if TTS fails
+        if response_text and response_text.strip():
+            logger.info(f"⬅️ Backend response: {response_text[:100]}...")
+            
+            # Send the text message to frontend via data channel
+            await self._send_message_to_frontend(response_text, "agent")
+            
+            # Try to speak the response
+            await self._speak_with_fallback(response_text)
         
         # Stop the default LLM response since we handled it
         raise StopResponse()
@@ -361,6 +443,9 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"✅ Session ID: {session_data.get('session_id', 'Unknown')}")
     
     try:
+        # Store room instance in assistant for message sending
+        assistant._room_instance = ctx.room
+        
         # Start the session
         await session.start(room=ctx.room, agent=assistant)
         
