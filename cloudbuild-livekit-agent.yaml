@@ -50,6 +50,8 @@ steps:
       - '--timeout'
       - '3600'
       - '--no-cpu-throttling'
+      - '--port'
+      - '8080'
       - '--update-secrets'
       - conversationalengine-secrets=conversationalengine-secrets:latest
 
