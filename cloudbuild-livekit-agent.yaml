@@ -1,0 +1,64 @@
+substitutions:
+  _REGION: us-central1
+  _ARTIFACT_REGISTRY_REPO: conversationalengine-repo
+  _SERVICE_NAME: conversationalengine-livekit-agent
+
+steps:
+  # 1. Build the livekit-agent service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-livekit-agent'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '-f'
+      - 'livekit-agent/Dockerfile'
+      - '.'
+
+  # 2. Push the livekit-agent service image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-livekit-agent'
+    waitFor: ['build-livekit-agent']
+    args: ['push', '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/${_SERVICE_NAME}:$COMMIT_SHA']
+
+  # 3. Deploy livekit-agent service to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-livekit-agent'
+    waitFor: ['push-livekit-agent']
+    entrypoint: gcloud
+    timeout: 600s
+    secretEnv: ['conversationalengine-secrets']
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi' 
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '10' 
+      - '--concurrency'
+      - '1' 
+      - '--timeout'
+      - '3600'
+      - '--update-secrets'
+      - conversationalengine-secrets=conversationalengine-secrets:latest
+
+images:
+  - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/${_SERVICE_NAME}:$COMMIT_SHA'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/562270549707/secrets/conversationalengine-secrets/versions/latest
+      env: 'conversationalengine-secrets'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

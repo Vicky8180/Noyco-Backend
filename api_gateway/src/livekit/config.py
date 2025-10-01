@@ -10,7 +10,7 @@ from pydantic import Field, AnyUrl
 
 class LiveKitVoiceSettings(BaseSettings):
     # LiveKit settings - All from environment
-    LIVEKIT_HOST: AnyUrl
+    LIVEKIT_URL: AnyUrl
     LIVEKIT_API_KEY: str
     LIVEKIT_API_SECRET: str
     LIVEKIT_TTL_MINUTES: int = 120

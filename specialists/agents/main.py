@@ -296,7 +296,7 @@ async def process_therapy_message(request: TherapyAgentRequest):
         _logger.error(f"Error in therapy agent: {e}")
         raise HTTPException(status_code=500, detail=f"Therapy agent error: {str(e)}")
 
-@app.post("/loneliness/process", response_model=AgentResponse)
+@app.post("/loneliness-companion/process", response_model=AgentResponse)
 async def process_loneliness(request: LonelinessCompanionRequest):
     """Process loneliness agent requests"""
     try:

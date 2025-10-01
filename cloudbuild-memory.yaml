@@ -37,7 +37,7 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--memory'
-      - '1Gi'
+      - '512Mi'
       - '--cpu'
       - '1'
       - '--min-instances'

@@ -1,0 +1,14 @@
+livekit>=0.12.0
+livekit-agents>=0.12.0
+livekit-plugins-deepgram
+livekit-plugins-elevenlabs  
+livekit-plugins-google
+livekit-plugins-silero
+livekit-plugins-turn-detector>=0.2.0  # Advanced turn detection
+livekit-plugins-noise-cancellation>=0.2.0  # Krisp-powered noise cancellation
+python-dotenv
+aiohttp
+asyncio-throttle
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+websockets
