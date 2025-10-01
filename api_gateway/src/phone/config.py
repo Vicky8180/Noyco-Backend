@@ -25,7 +25,7 @@
 
 #     # Gemini settings
 #     GEMINI_API_KEY:              str    = "AIzaSyCklVFWThy-L9Ad4TqQdYNefGF4f206THM"
-#     GEMINI_MODEL:                str    = "gemini-1.5-flash"
+#     GEMINI_MODEL:                str    = "gemini-2.5-flash-lite"
 
 #     # WebSocket settings
 #     # WebSocket settings

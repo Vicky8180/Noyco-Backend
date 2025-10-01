@@ -18,7 +18,7 @@ _API_CONFIGURED = False
 class AsyncGeminiClient:
     """Optimized asynchronous client for Google's Gemini API"""
 
-    def __init__(self, api_key: str, model_name: str = "models/gemini-1.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "models/gemini-2.5-flash-lite"):
         if not api_key:
             raise ValueError("API key cannot be empty")
 
@@ -78,7 +78,7 @@ class AsyncGeminiClient:
             raise
 
 @lru_cache(maxsize=1)
-def get_gemini_client(model_name: str = "models/gemini-1.5-flash") -> AsyncGeminiClient:
+def get_gemini_client(model_name: str = "models/gemini-2.5-flash-lite") -> AsyncGeminiClient:
     """Get cached Gemini client instance"""
     
     # Load from configuration using pydantic-settings

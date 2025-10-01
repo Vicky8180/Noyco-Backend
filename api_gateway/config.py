@@ -132,7 +132,7 @@ class APIGatewaySettings(BaseSettings):
     VOICE_WIDGET_JWT_SECRET: str
     
     # LiveKit
-    LIVEKIT_HOST: str
+    LIVEKIT_URL: str
     LIVEKIT_API_KEY: str
     LIVEKIT_API_SECRET: str
     

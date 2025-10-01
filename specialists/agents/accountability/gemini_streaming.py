@@ -19,7 +19,7 @@ except ImportError:
     # Fallback for when config is not available
     # class FallbackSettings:
     #     GEMINI_API_KEY = None
-    #     DEFAULT_MODEL_NAME = "gemini-1.5-flash"
+    #     DEFAULT_MODEL_NAME = "gemini-2.5-flash-lite"
     #     DEFAULT_MAX_TOKENS = 150
     #     DEFAULT_TEMPERATURE = 0.7
     #     DEFAULT_TOP_P = 0.8
