@@ -1,12 +1,14 @@
 """
 HTTP Server wrapper for LiveKit Agent
 Provides health check endpoint for Cloud Run while running the agent in background
+LiveKit plugins are imported on main thread to avoid registration errors
 """
 import asyncio
 import logging
 import os
-import threading
+import multiprocessing
 import sys
+import signal
 from aiohttp import web
 from config import get_settings
 
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Global flag to track agent status
-agent_running = False
+agent_process = None
 agent_started = False
 
 class AgentServer:
@@ -31,26 +33,25 @@ class AgentServer:
     
     async def health_check(self, request):
         """Health check endpoint for Cloud Run"""
-        global agent_started, agent_running
+        global agent_started, agent_process
+        agent_alive = agent_process is not None and agent_process.is_alive() if agent_process else False
         return web.json_response({
             'status': 'healthy',
             'service': 'livekit-agent',
             'agent_started': agent_started,
-            'agent_running': agent_running
+            'agent_running': agent_alive
         })
     
-    def start_agent_thread(self):
-        """Start the LiveKit agent in a separate thread"""
-        global agent_running, agent_started
+    def start_agent_process(self):
+        """Start the LiveKit agent in a separate process"""
+        global agent_process, agent_started
         
         def run_agent():
-            global agent_running, agent_started
+            """Run in separate process - has its own main thread for plugin registration"""
             try:
-                logger.info("🚀 Starting LiveKit agent in background thread...")
-                agent_started = True
-                agent_running = True
+                logger.info("🚀 Starting LiveKit agent in separate process...")
                 
-                # Import here to avoid issues with event loop
+                # Import in the new process (this process has its own main thread)
                 from livekit.agents import WorkerOptions, cli
                 from main import entrypoint
                 
@@ -60,19 +61,20 @@ class AgentServer:
                 
             except Exception as e:
                 logger.error(f"❌ Agent error: {e}", exc_info=True)
-                agent_running = False
+                sys.exit(1)
         
-        # Start agent in daemon thread
-        agent_thread = threading.Thread(target=run_agent, daemon=True)
-        agent_thread.start()
-        logger.info("✅ LiveKit agent thread started")
+        # Start agent in separate process (has its own main thread)
+        agent_process = multiprocessing.Process(target=run_agent, daemon=True)
+        agent_process.start()
+        agent_started = True
+        logger.info(f"✅ LiveKit agent process started (PID: {agent_process.pid})")
     
     async def run(self):
         """Run both the HTTP server and LiveKit agent"""
         port = int(os.getenv('PORT', 8080))
         
-        # Start the LiveKit agent in background thread
-        self.start_agent_thread()
+        # Start the LiveKit agent in background process
+        self.start_agent_process()
         
         # Give the agent a moment to initialize
         await asyncio.sleep(2)
@@ -86,13 +88,34 @@ class AgentServer:
         await site.start()
         logger.info(f"✅ HTTP server listening on 0.0.0.0:{port} - Ready for Cloud Run health checks")
         
-        # Keep server running
+        # Handle graceful shutdown
+        shutdown_event = asyncio.Event()
+        
+        def signal_handler(signum):
+            logger.info(f"📡 Received signal {signum}, shutting down...")
+            shutdown_event.set()
+        
+        # Register signal handlers
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
+        
+        # Keep server running until shutdown signal
         try:
-            while True:
-                await asyncio.sleep(3600)  # Sleep for an hour
+            await shutdown_event.wait()
         except asyncio.CancelledError:
             logger.info("🛑 Server cancelled, shutting down...")
         finally:
+            # Cleanup
+            global agent_process
+            if agent_process and agent_process.is_alive():
+                logger.info("🛑 Terminating agent process...")
+                agent_process.terminate()
+                agent_process.join(timeout=5)
+                if agent_process.is_alive():
+                    logger.warning("⚠️  Agent process did not terminate, killing...")
+                    agent_process.kill()
+            
             await runner.cleanup()
             logger.info("👋 Shutdown complete")
 
@@ -104,6 +127,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing on some platforms
+    multiprocessing.set_start_method('spawn', force=True)
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
