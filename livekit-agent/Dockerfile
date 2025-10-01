@@ -5,8 +5,7 @@ FROM python:3.13.7-slim
 WORKDIR /app
 
 # Copy the requirements file and install dependencies
-# This step is cached by Docker to speed up subsequent builds
-COPY requirements.txt .
+COPY livekit-agent/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
