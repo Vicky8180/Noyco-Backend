@@ -22,4 +22,4 @@ EXPOSE 8080
 ENV PORT=8080
 
 # Command to run the agent server with health check endpoint
-CMD ["python", "-u", "server.py"]
+CMD ["python", "-u", "server.py", "start"]
