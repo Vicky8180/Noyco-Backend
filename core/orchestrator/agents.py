@@ -137,9 +137,11 @@ def get_service_url(service_name: str) -> str:
     # Fallback to building URL from AGENT_CONFIG (development)
     config = get_specialist_config()
     if service_name in config:
-        # Use localhost for development
+        # Use localhost for development, otherwise use environment-based host
         host = os.getenv("SERVICE_HOST", "localhost")
-        return f"http://{host}:{config[service_name]['port']}{config[service_name]['path']}"
+        # Use http for localhost/development, https for production
+        protocol = "http" if host == "localhost" or host.startswith("127.0.0.1") else "https"
+        return f"{protocol}://{host}:{config[service_name]['port']}{config[service_name]['path']}"
     
     # Final fallback to primary service URL
     return settings.PRIMARY_SERVICE_URL

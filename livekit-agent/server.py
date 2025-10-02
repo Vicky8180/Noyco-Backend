@@ -1,16 +1,20 @@
 """
 HTTP Server wrapper for LiveKit Agent
 Provides health check endpoint for Cloud Run while running the agent in background
-Uses subprocess to run agent in separate process with its own main thread
+Runs the agent directly in the same process using threading
 """
 import asyncio
 import logging
 import os
 import sys
 import signal
-import subprocess
+import threading
 from aiohttp import web
 from config import get_settings
+
+# Import the agent entrypoint
+from main import entrypoint as agent_entrypoint
+from livekit.agents import WorkerOptions, cli
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,8 +22,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Global flag to track agent status
-agent_process = None
+agent_thread = None
 agent_started = False
+agent_running = False
 
 
 class AgentServer:
@@ -34,67 +39,49 @@ class AgentServer:
     
     async def health_check(self, request):
         """Health check endpoint for Cloud Run"""
-        global agent_started, agent_process
-        agent_alive = False
-        if agent_process:
-            # Check if process is still running
-            poll = agent_process.poll()
-            agent_alive = poll is None  # None means process is still running
+        global agent_started, agent_running, agent_thread
+        thread_alive = agent_thread.is_alive() if agent_thread else False
         
         return web.json_response({
             'status': 'healthy',
             'service': 'livekit-agent',
             'agent_started': agent_started,
-            'agent_running': agent_alive
+            'agent_running': agent_running and thread_alive
         })
     
-    def start_agent_process(self):
-        """Start the LiveKit agent in a separate process using subprocess"""
-        global agent_process, agent_started
+    def start_agent_thread(self):
+        """Start the LiveKit agent in a separate thread"""
+        global agent_thread, agent_started, agent_running
         
-        # Start agent using subprocess - runs main.py with 'start' command
-        # This creates a completely separate process with its own main thread
+        def run_agent():
+            """Run the LiveKit agent in a thread"""
+            global agent_running
+            try:
+                agent_running = True
+                logger.info("🚀 Starting LiveKit agent worker...")
+                # Run the LiveKit agent using cli.run_app
+                cli.run_app(WorkerOptions(entrypoint_fnc=agent_entrypoint))
+            except Exception as e:
+                logger.error(f"❌ Agent error: {e}", exc_info=True)
+            finally:
+                agent_running = False
+                logger.info("🛑 Agent thread stopped")
+        
         try:
-            agent_process = subprocess.Popen(
-                [sys.executable, '-u', 'main.py', 'start'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
+            agent_thread = threading.Thread(target=run_agent, daemon=True)
+            agent_thread.start()
             agent_started = True
-            logger.info(f"✅ LiveKit agent process started (PID: {agent_process.pid})")
-            
-            # Start a task to monitor agent output
-            asyncio.create_task(self.monitor_agent_output())
-            
+            logger.info("✅ LiveKit agent thread started")
         except Exception as e:
-            logger.error(f"❌ Failed to start agent process: {e}")
+            logger.error(f"❌ Failed to start agent thread: {e}")
             agent_started = False
-    
-    async def monitor_agent_output(self):
-        """Monitor and log agent process output"""
-        global agent_process
-        if not agent_process or not agent_process.stdout:
-            return
-        
-        try:
-            # Read agent output line by line in non-blocking way
-            loop = asyncio.get_event_loop()
-            while True:
-                line = await loop.run_in_executor(None, agent_process.stdout.readline)
-                if not line:
-                    break
-                logger.info(f"[Agent] {line.rstrip()}")
-        except Exception as e:
-            logger.error(f"Error monitoring agent output: {e}")
     
     async def run(self):
         """Run both the HTTP server and LiveKit agent"""
         port = int(os.getenv('PORT', 8080))
         
-        # Start the LiveKit agent in background process
-        self.start_agent_process()
+        # Start the LiveKit agent in background thread
+        self.start_agent_thread()
         
         # Give the agent a moment to initialize
         await asyncio.sleep(2)
@@ -127,16 +114,11 @@ class AgentServer:
             logger.info("🛑 Server cancelled, shutting down...")
         finally:
             # Cleanup
-            global agent_process
-            if agent_process:
-                logger.info("🛑 Terminating agent process...")
-                try:
-                    agent_process.terminate()
-                    agent_process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    logger.warning("⚠️  Agent process did not terminate, killing...")
-                    agent_process.kill()
-                    agent_process.wait()
+            global agent_thread, agent_running
+            if agent_thread and agent_thread.is_alive():
+                logger.info("🛑 Waiting for agent thread to finish...")
+                agent_running = False
+                # Agent thread is daemon, so it will be terminated when main thread exits
             
             await runner.cleanup()
             logger.info("👋 Shutdown complete")

@@ -429,7 +429,7 @@ async def entrypoint(ctx: JobContext):
         vad=silero.VAD.load(
             min_speech_duration=settings.VAD_MIN_SPEECH_DURATION,
             min_silence_duration=settings.VAD_MIN_SILENCE_DURATION,
-            padding_duration=settings.VAD_PADDING_DURATION,
+            prefix_padding_duration=settings.VAD_PADDING_DURATION,
             activation_threshold=settings.VAD_ACTIVATION_THRESHOLD,
         ),
         turn_detection="vad",  # Use VAD for turn detection
