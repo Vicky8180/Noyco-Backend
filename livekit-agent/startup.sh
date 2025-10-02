@@ -21,4 +21,4 @@ if [ -z "$LIVEKIT_API_SECRET" ]; then
 fi
 
 echo "✅ Starting server..."
-exec python -u server.py
+exec python -u server.py start
