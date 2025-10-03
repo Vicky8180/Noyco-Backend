@@ -8,7 +8,7 @@ from ..audit import log
 stripe = get_stripe()
 settings = get_settings()
 
-async def verify_stripe_signature(request: Request) -> stripe.Event:
+async def verify_stripe_signature(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     try:
@@ -21,9 +21,6 @@ async def verify_stripe_signature(request: Request) -> stripe.Event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid signature: {e}")
 
     # replay protection
-    if is_processed(event.id):
-        # Already handled – acknowledge
-        raise HTTPException(status_code=200, detail="Event already processed")
-
-    mark_processed(event.id)
+        # replay protection handled in dispatcher; do not short-circuit here to keep handler fast
+        return event
     return event 

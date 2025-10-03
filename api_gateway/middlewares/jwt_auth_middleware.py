@@ -53,6 +53,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             "/voice-widget",  # allow voice widget endpoints (embed/js/iframe/session)
             "/.well-known",  # chrome devtools fetches
             "/individual/mediscan/patients",  # allow fetching patients without auth
+            "/public",  # allow all funnel public endpoints without auth
             # "/api/fhir/upload-csv",
             "/auth/otp" , # ← add this to allow all OTP endpoints without auth
             "/chat",
@@ -62,6 +63,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             "/user-profile/goals",  # Allow all goal endpoints without authentication
             "/auth/password/reset/request",
             "/auth/password/reset/confirm",
+            "/auth/verify-otp-and-set-password",  # allow funnel auto-login endpoint without auth
             "/api/v1/livekit",  # Allow LiveKit voice assistant endpoints without authentication
             "/api/v1/voice"     # Allow professional voice assistant endpoints without authentication
         }

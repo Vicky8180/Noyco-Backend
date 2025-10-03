@@ -295,25 +295,12 @@ class AuthController:
                 detail="Email not verified"
             )
 
-
         plan_type: Optional[PlanType] = None
 
         # Check user role to determine where to get plan information
         if user["role"] == UserRole.ADMIN.value:
             # Admin users don't have plan restrictions
             plan_type = None
-        # elif user["role"] == UserRole.HOSPITAL.value:
-        #     # Get hospital info
-        #     hospital = self.db.hospitals.find_one({"id": user["role_entity_id"]})
-        #     if not hospital:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_404_NOT_FOUND,
-        #             detail="Hospital not found"
-        #         )
-
-        #     # Get plan from hospital
-        #     plan = hospital.get("plan")
-        #     plan_type = PlanType(plan) if plan else None
         elif user["role"] == UserRole.INDIVIDUAL.value:
             # Get individual user info
             individual = self.db.individuals.find_one({"id": user["role_entity_id"]})
@@ -325,7 +312,11 @@ class AuthController:
 
             # Get plan from individual
             plan = individual.get("plan")
-            plan_type = PlanType(plan) if plan else None
+            # Legacy auth PlanType supports only lite/pro/premium; ignore new plan strings
+            try:
+                plan_type = PlanType(plan) if plan else None
+            except Exception:
+                plan_type = None
         else:
             # Assistant users inherit plan from their individual owner
             assistant = self.db.assistants.find_one({"id": user["role_entity_id"]})
@@ -344,7 +335,10 @@ class AuthController:
 
             # Get plan from individual
             plan = individual.get("plan")
-            plan_type = PlanType(plan) if plan else None
+            try:
+                plan_type = PlanType(plan) if plan else None
+            except Exception:
+                plan_type = None
 
         # Update last login timestamp
         self.db.users.update_one(
@@ -377,18 +371,6 @@ class AuthController:
         if role == UserRole.ADMIN:
             # Admin users don't have plan restrictions
             pass
-        # elif role == UserRole.HOSPITAL:
-        #     # Get hospital info
-        #     hospital = self.db.hospitals.find_one({"id": role_entity_id})
-        #     if not hospital:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_404_NOT_FOUND,
-        #             detail="Hospital not found"
-        #         )
-
-        #     # Get plan from hospital
-        #     plan = hospital.get("plan")
-        #     plan_type = PlanType(plan) if plan else None
         elif role == UserRole.INDIVIDUAL:
             # Get individual user info
             individual = self.db.individuals.find_one({"id": role_entity_id})
@@ -400,7 +382,10 @@ class AuthController:
 
             # Get plan from individual
             plan = individual.get("plan")
-            plan_type = PlanType(plan) if plan else None
+            try:
+                plan_type = PlanType(plan) if plan else None
+            except Exception:
+                plan_type = None
         elif role == UserRole.ASSISTANT:
             # Assistant users inherit plan from their individual owner
             assistant = self.db.assistants.find_one({"id": role_entity_id})
@@ -419,7 +404,10 @@ class AuthController:
 
             # Get plan from individual
             plan = individual.get("plan")
-            plan_type = PlanType(plan) if plan else None
+            try:
+                plan_type = PlanType(plan) if plan else None
+            except Exception:
+                plan_type = None
 
         return {
             "role": role,

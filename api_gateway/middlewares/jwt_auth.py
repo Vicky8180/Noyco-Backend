@@ -53,6 +53,12 @@ class JWTAuthController:
 
         # Cookie settings from config
         self.secure_cookie = self.settings.COOKIE_SECURE
+        # SameSite policy and optional cookie domain from config
+        try:
+            self.samesite = (self.settings.COOKIE_SAMESITE or "lax").lower()
+        except Exception:
+            self.samesite = "lax"
+        self.cookie_domain = getattr(self.settings, "COOKIE_DOMAIN", None) or None
 
         # Cookie names from config
         self.access_token_cookie = self.settings.JWT_ACCESS_TOKEN_COOKIE_NAME
@@ -312,9 +318,10 @@ class JWTAuthController:
             value=access_token,
             httponly=True,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.samesite,
             max_age=self.access_token_expire_minutes * 60,
-            path="/"
+            path="/",
+            domain=self.cookie_domain
         )
 
         # Refresh token cookie - long lived, httpOnly
@@ -323,9 +330,10 @@ class JWTAuthController:
             value=refresh_token,
             httponly=True,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.samesite,
             max_age=self.refresh_token_expire_days * 24 * 60 * 60,
-            path="/"
+            path="/",
+            domain=self.cookie_domain
         )
 
         # CSRF token cookie - accessible to JavaScript
@@ -334,9 +342,10 @@ class JWTAuthController:
             value=csrf_token,
             httponly=False,
             secure=self.secure_cookie,
-            samesite="lax",
+            samesite=self.samesite,
             max_age=self.access_token_expire_minutes * 60,
-            path="/"
+            path="/",
+            domain=self.cookie_domain
         )
 
         return csrf_token
@@ -347,20 +356,23 @@ class JWTAuthController:
             key=self.access_token_cookie,
             path="/",
             secure=self.secure_cookie,
-            httponly=True
+            httponly=True,
+            domain=self.cookie_domain
         )
 
         response.delete_cookie(
             key=self.refresh_token_cookie,
             path="/",
             secure=self.secure_cookie,
-            httponly=True
+            httponly=True,
+            domain=self.cookie_domain
         )
 
         response.delete_cookie(
             key=self.csrf_cookie_name,
             path="/",
-            secure=self.secure_cookie
+            secure=self.secure_cookie,
+            domain=self.cookie_domain
         )
 
     def get_current_user(self, request: Request) -> JWTClaims:

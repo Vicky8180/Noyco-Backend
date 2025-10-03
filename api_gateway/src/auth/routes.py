@@ -235,7 +235,10 @@ async def google_login(request: Request, response: Response):
         if role == UserRole.INDIVIDUAL:
             ind = auth_controller.db.individuals.find_one({"id": role_entity_id})
             plan = ind.get("plan") if ind else None
-            plan_type = PlanType(plan) if plan else None
+            try:
+                plan_type = PlanType(plan) if plan else None
+            except Exception:
+                plan_type = None
 
         # Issue our cookies
         access_token = jwt_auth.create_access_token(
@@ -609,6 +612,74 @@ async def test_smtp_connection_route():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=result["error"]
         )
+
+# ──────────────────────────────────────────────
+#  Combined: Verify OTP + set password + issue cookies (public)
+# ──────────────────────────────────────────────
+
+class VerifyAndSetPasswordBody(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+    password: str
+
+    _validate_pwd = validator("password", allow_reuse=True)(password_validator)
+
+
+@router.post("/verify-otp-and-set-password")
+async def verify_otp_and_set_password(
+    body: VerifyAndSetPasswordBody,
+    response: Response
+):
+    """Public endpoint for funnel: verify OTP, set password, mark verified, and issue JWT cookies for auto-login."""
+    # Verify OTP first
+    if not verify_otp(body.email, body.otp):
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+    # Find user
+    user_doc = auth_controller.find_user_by_email(body.email)
+    if not user_doc:
+        raise HTTPException(status_code=400, detail="Account not found")
+
+    # Set password
+    new_hash = auth_controller.hash_password(body.password)
+    auth_controller.db.users.update_one({"email": body.email}, {"$set": {"password_hash": new_hash, "email_verified": True, "updated_at": datetime.utcnow()}})
+
+    # Also update role collection mirror
+    role = user_doc.get("role")
+    role_entity_id = user_doc.get("role_entity_id")
+    if role == UserRole.INDIVIDUAL.value:
+        auth_controller.db.individuals.update_one({"email": body.email}, {"$set": {"password_hash": new_hash, "updated_at": datetime.utcnow()}})
+
+    # Issue cookies for auto-login
+    plan_type = None
+    if role == UserRole.INDIVIDUAL.value and role_entity_id:
+        ind = auth_controller.db.individuals.find_one({"id": role_entity_id})
+        plan = ind.get("plan") if ind else None
+        try:
+            plan_type = PlanType(plan) if plan else None
+        except Exception:
+            plan_type = None
+
+    access_token = jwt_auth.create_access_token(
+        user_doc["id"],
+        role_entity_id,
+        UserRole(role) if isinstance(role, str) else role,
+        body.email,
+        plan_type,
+    )
+    refresh_token = jwt_auth.create_refresh_token(user_doc["id"], role_entity_id)
+    csrf_token = jwt_auth.set_auth_cookies(response, access_token, refresh_token)
+
+    return {
+        "success": True,
+        "user": {
+            "id": user_doc["id"],
+            "email": body.email,
+            "role": role,
+            "role_entity_id": role_entity_id,
+        },
+        "csrf_token": csrf_token,
+    }
 
 
 @router.post("/smtp/send-test-email")

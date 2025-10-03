@@ -63,7 +63,14 @@ def _store_otp(email: str, otp_plain: str, *, purpose: str = "signup"):
 
 
 def _send_email(to_email: str, subject: str, body: str):
+    # Development-friendly fallback: if SMTP is not configured and we're not in production,
+    # log the e-mail content to console and return gracefully so OTP flows are testable locally.
     if not SMTP_USER or not SMTP_PASS:
+        env = getattr(settings, "ENVIRONMENT", "development").lower()
+        if env != "production":
+            print("[DEV SMTP FALLBACK] SMTP not configured. Printing e-mail to console instead.")
+            print(f"[DEV SMTP FALLBACK] To: {to_email}\nSubject: {subject}\n\n{body}")
+            return
         raise RuntimeError(f"SMTP credentials not configured. SMTP_USER: {'SET' if SMTP_USER else 'NOT SET'}, SMTP_PASS: {'SET' if SMTP_PASS else 'NOT SET'}")
     
     print(f"DEBUG: Attempting to send email with SMTP_USER: {SMTP_USER}")
@@ -129,6 +136,7 @@ def send_signup_otp(email: str, name: Optional[str] = ""):
         "Noyco Team"
     )
     _send_email(email, "Your Noyco verification code", body)
+    # Intentionally do not write to generic metrics collection
 
 
 # ──────────────────────────────────────────────────────────────
@@ -164,6 +172,7 @@ def verify_otp(email: str, otp_plain: str) -> bool:
     if not pwd_context.verify(otp_plain, doc["otp_hash"]):
         return False
     collection.update_one({"_id": doc["_id"]}, {"$set": {"verified": True}})
+    # Intentionally do not write to generic metrics collection
     return True
 
 
