@@ -15,6 +15,26 @@ from .schema import (
 router = APIRouter(prefix="/billing", tags=["Billing"])
 billing_controller = BillingController()
 jwt_auth = JWTAuthController()
+@router.get("/plan/current", response_model=IndividualPlanResponse)
+async def get_current_individual_plan(
+    current_user = Depends(jwt_auth.get_current_user)
+):
+    """Return the caller's current individual subscription details.
+
+    Behaviour (current release):
+    - Individuals: returns their plan document from DB
+    - Other roles: 403 (hospital billing is disabled)
+    """
+
+    # Restrict to individual users in this release
+    if current_user.role != UserRole.INDIVIDUAL:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only individual accounts can view current subscription in this release")
+
+    plan = await billing_controller.get_individual_plan(current_user.role_entity_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    return plan
+
 
 
 @router.get("/plan", response_model=AvailablePlansResponse)
@@ -25,14 +45,29 @@ async def get_available_plans(
     Get available plans based on user role.
 
     Returns different plan options based on the user's role:
-    - For hospitals: LITE and PRO plans
-    - For individuals: HOBBY and BASIC plans
-    - For admins: All plans
+    - For individuals: new Leapply plans (1m, 3m, 6m)
+    - For admins: same individual catalog (hospital billing disabled this release)
     
     Also includes the user's current plan if they have one.
     """
+    # Normalize role which may come as Enum or string
+    role_str = str(current_user.role)
+    if "." in role_str:
+        role_str = role_str.split(".")[-1]
+    role_str = role_str.lower()
+
+    # Guard: hospital billing disabled for this release
+    if role_str == "hospital":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Hospital billing is disabled for this release")
+
+    # Only individual and admin are supported here; assistants denied
+    if role_str not in ("individual", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to view plans")
+
+    user_role_enum = UserRole.INDIVIDUAL if role_str == "individual" else UserRole.ADMIN
+
     return await billing_controller.get_available_plans(
-        user_role=current_user.role,
+        user_role=user_role_enum,
         role_entity_id=current_user.role_entity_id
     )
 
@@ -43,26 +78,8 @@ async def get_available_services(
     current_user = Depends(jwt_auth.get_current_user)
 ):
     """Get available services based on the user's current plan"""
-    try:
-        # Get available services
-        role_entity_id = None
-        
-        # For hospitals and assistants (linked to hospitals), get the hospital's services
-        if current_user.role == UserRole.HOSPITAL:
-            role_entity_id = current_user.role_entity_id
-        elif current_user.role == UserRole.ASSISTANT:
-            # Assistant belongs to a hospital
-            assistant = await billing_controller.get_assistant_by_id(current_user.role_entity_id)
-            if assistant:
-                role_entity_id = assistant.get("hospital_id")
-        
-        services = await billing_controller.get_available_services(
-            user_id=current_user.user_id, 
-            role_entity_id=role_entity_id
-        )
-        return services
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Guard: hospital service selection disabled for this release
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Service catalog is not available in this release")
 
 # @router.post("/services/select", response_model=HospitalPlanResponse)
 # async def select_services(
@@ -189,48 +206,28 @@ async def select_plan(
     csrf_token: str = Header(..., alias="X-CSRF-Token")
 ):
     """
-    Select a plan for a hospital **or** an individual.
-    - Hospitals can choose LITE / PRO
-    - Individuals can choose LITE / PRO
+    Admin override: set an individual's plan manually.
+
+    Rationale: This endpoint is restricted to ADMIN to avoid normal clients
+    bypassing Stripe payment flows. Use only for support/tooling.
     """
 
-    # INDIVIDUAL FLOW -----------------------------------------------------
-    if current_user.role == UserRole.INDIVIDUAL:
-        # Individuals can now choose the same core plans as hospitals (LITE / PRO)
-        if request.plan_type not in [PlanType.LITE, PlanType.PRO]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Individuals can only choose LITE or PRO plans"
-            )
-        # id is not strictly needed but frontend sends it ‑ double-check
-        if request.id and request.id != current_user.role_entity_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only manage your own plan"
-            )
-        # Delegate to controller helper so DB is updated properly
-        resp = await billing_controller.select_individual_plan(
-            individual_id=current_user.role_entity_id,
-            plan_type=request.plan_type,
-            user_id=current_user.user_id,
-        )
-        return resp
+    # Enforce ADMIN only
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can modify plans directly")
 
-    # HOSPITAL / ADMIN FLOW ----------------------------------------------
-    if current_user.role not in [UserRole.ADMIN, UserRole.HOSPITAL]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only hospital admins, individuals or platform admins can select plans"
-        )
+    # Validate plan type
+    if request.plan_type not in [PlanType.ONE_MONTH, PlanType.THREE_MONTHS, PlanType.SIX_MONTHS]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid plan type. Choose one_month, three_months, or six_months")
 
-    # Hospital admins can only manage their own hospital
-    if current_user.role == UserRole.HOSPITAL:
-        hospital = await billing_controller.get_hospital_by_id(current_user.role_entity_id)
-        if not hospital or hospital.get("id") != request.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Hospital admins can only manage their own hospital plan"
-            )
+    # Require explicit individual id in request.id
+    if not request.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin must provide target individual id in 'id'")
 
-    return await billing_controller.select_plan(request, current_user.user_id)
+    resp = await billing_controller.select_individual_plan(
+        individual_id=request.id,
+        plan_type=request.plan_type,
+        user_id=current_user.user_id,
+    )
+    return resp
 

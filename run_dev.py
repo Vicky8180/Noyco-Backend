@@ -2,6 +2,7 @@ import uvicorn
 import threading
 import time
 import sys
+import os
 import argparse
 import subprocess
 from typing import List, Dict
@@ -35,7 +36,11 @@ def run_service(module: str, port: int, name: str, delay: int = 0, app_var: str 
             cmd.append("--reload")
 
         try:
-            process = subprocess.Popen(cmd)
+            # Ensure child process can import top-level packages from Noyco-Backend
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = base_dir + (os.pathsep + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
+            process = subprocess.Popen(cmd, cwd=base_dir, env=env)
             return process  # Return the process object
         except Exception as e:
             print(f"Error starting {name}: {str(e)}", file=sys.stderr)
@@ -92,6 +97,14 @@ def start_all_services(dev_mode: bool = False):
     return processes if dev_mode else threads
 
 if __name__ == "__main__":
+    # Normalize working directory and Python path so module imports resolve
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    try:
+        os.chdir(BASE_DIR)
+    except Exception:
+        pass
+    if BASE_DIR not in sys.path:
+        sys.path.insert(0, BASE_DIR)
     parser = argparse.ArgumentParser(description='Run all Medical AI services')
     parser.add_argument('mode', nargs='?', default='', help='Use "dev" for development mode with hot reload')
     args = parser.parse_args()

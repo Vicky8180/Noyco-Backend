@@ -31,6 +31,7 @@ def setup_routers(app):
     from .src.metrics.routes import router as metrics_router
     from .src.metrics.agent_routes import router as agent_metrics_router
     from .src.documentation.router import router as documentation_router
+    from .src.public.routes import router as public_router
 
     # Core authentication and user management
     app.include_router(auth_router, tags=["Authentication"])
@@ -49,6 +50,8 @@ def setup_routers(app):
     # Billing and payments
     app.include_router(billing_router, tags=["Billing"])
     app.include_router(stripe_router, tags=["Payments"])
+    # Public (no-auth) billing endpoints for funnel
+    app.include_router(public_router, tags=["Public Billing"])
     
     # Voice and AI services
     app.include_router(livekit_router, prefix="/api/v1/voice", tags=["Voice Assistant"])

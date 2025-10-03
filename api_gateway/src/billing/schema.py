@@ -4,11 +4,13 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from datetime import datetime
 
+# ---------------------------------------------------------------------------
+# Plan types (Individuals only for current release)
+# ---------------------------------------------------------------------------
 class PlanType(str, Enum):
-    LITE = "lite"
-    PRO = "pro"
-    HOBBY = "hobby"
-    BASIC = "basic"
+    ONE_MONTH = "one_month"
+    THREE_MONTHS = "three_months"
+    SIX_MONTHS = "six_months"
 
 class ServiceType(str, Enum):
     CHECKPOINT = "checkpoint"
@@ -21,11 +23,13 @@ class ServiceType(str, Enum):
     HUMAN_ESCALATION = "human_escalation"
 
 class PlanStatus(str, Enum):
+    PENDING = "pending"
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    PAST_DUE = "past_due"
     
 class ModelTier(str, Enum):
     GEMINI_1_5 = "gemini-1.5" 
@@ -35,7 +39,7 @@ class ModelTier(str, Enum):
     
 class UserRole(str, Enum):
     ADMIN = "admin"
-    # HOSPITAL = "hospital"
+    # HOSPITAL = "hospital"  # Hospital billing disabled for current release
     ASSISTANT = "assistant"
     INDIVIDUAL = "individual"
 
@@ -104,19 +108,32 @@ class PlanConfigResponse(BaseModel):
     rate_limit_per_minute: int
 
 class PlanDetailResponse(BaseModel):
-    """Detailed plan information for display purposes"""
+    """Detailed plan information for display purposes (Leapply-style)."""
     plan_type: PlanType
     name: str
     description: str
-    price_monthly: float
-    price_yearly: float
+
+    # Legacy fields (kept for compatibility; not used for new cards)
+    price_monthly: Optional[float] = None
+    price_yearly: Optional[float] = None
+
     max_agents: int
     features: List[str]
     model_tier: str
+
+    # New display fields for Leapply plans
+    intro_price: Optional[float] = None
+    recurring_price: Optional[float] = None
+    recurring_interval_label: Optional[str] = None  # e.g., "every 3 months"
+    per_day_text: Optional[str] = None              # e.g., "$1.12 per day"
+    legal_disclaimer: Optional[str] = None          # auto-renewal text
+    is_most_popular: bool = False
+
+    # Back-compat flag
     is_recommended: bool = False
 
 class AvailablePlansResponse(BaseModel):
-    """Response model for available plans based on user role"""
+    """Response model for available plans based on user role."""
     plans: List[PlanDetailResponse]
     user_role: UserRole
     current_plan: Optional[PlanType] = None
@@ -143,7 +160,7 @@ class AvailableServicesResponse(BaseModel):
 #     updated_at: datetime
 
 class IndividualPlanResponse(BaseModel):
-    """Response model for individual plan details"""
+    """Response model for individual plan details."""
     id: str
     individual_id: str
     plan_type: PlanType
@@ -160,6 +177,12 @@ class IndividualPlanResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     plan_details: Optional[Dict[str, Any]] = None
+
+    # Optional Stripe schedule metadata for observability
+    stripe_schedule_id: Optional[str] = None
+    intro_price_id: Optional[str] = None
+    recurring_price_id: Optional[str] = None
+    recurring_interval: Optional[str] = None  # e.g., "1mo", "3mo", "6mo"
 
 # Database Models
 # class HospitalPlan(BaseModel):

@@ -92,6 +92,8 @@ class APIGatewaySettings(BaseSettings):
     
     # CORS settings
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Feature flags
+    FUNNEL_PUBLIC_BILLING_ENABLED: bool = True
     
     # API Keys
     GEMINI_API_KEY: str
@@ -118,15 +120,20 @@ class APIGatewaySettings(BaseSettings):
     STRIPE_SUCCESS_URL: str 
     STRIPE_CANCEL_URL: str 
     
-    # Stripe Price IDs
+    # Stripe Price IDs — Deprecated surface (do not use in code)
+    # Canonical source: api_gateway/src/stripe/config.py (StripeSettings)
+    # These are intentionally commented to avoid confusion; keep here only as
+    # historical reference so environments with old variables don't mislead.
     # PRICE_HOSP_LITE_MONTHLY: str
     # PRICE_HOSP_LITE_YEARLY: str
     # PRICE_HOSP_PRO_MONTHLY: str
     # PRICE_HOSP_PRO_YEARLY: str
-    PRICE_IND_LITE_MONTHLY: str
-    PRICE_IND_LITE_YEARLY: str
-    PRICE_IND_PRO_MONTHLY: str
-    PRICE_IND_PRO_YEARLY: str
+    # PRICE_IND_LITE_MONTHLY: str
+    # PRICE_IND_LITE_YEARLY: str
+    # PRICE_IND_PRO_MONTHLY: str
+    # PRICE_IND_PRO_YEARLY: str
+
+    # Leapply phased plans (Individuals): Use StripeSettings for IND_1M_*/IND_3M_*/IND_6M_* price IDs.
     
     # Voice Widget
     VOICE_WIDGET_JWT_SECRET: str
@@ -153,8 +160,8 @@ class APIGatewaySettings(BaseSettings):
     # SMTP - Zoho Mail Configuration
     SMTP_ZOHO_USER: Optional[str] 
     SMTP_ZOHO_PASS: Optional[str]
-    SMTP_HOST: Optional[str] = "smtp.zoho.in"  # Use region host if needed: smtp.zoho.eu, smtp.zoho.in
-    SMTP_PORT: Optional[int] = 465  # 465 (SSL) or 587 (STARTTLS)
+    SMTP_HOST: Optional[str] = "smtp.zoho.in"  
+    SMTP_PORT: Optional[int] = 465  
     
     # Server Configuration
     SERVICE_NAME: str = "api-gateway"

@@ -1,4 +1,5 @@
 import hashlib, time
+from datetime import datetime, timedelta
 from typing import Optional
 from ...database.db import get_database
 
@@ -20,4 +21,6 @@ def is_processed(key: str) -> bool:
     return db[COLLECTION_NAME].find_one({"key": key}) is not None
 
 def mark_processed(key: str):
-    db[COLLECTION_NAME].insert_one({"key": key, "expireAt": time.time() + TTL_SECONDS}) 
+    # Store expireAt as an ISODate so MongoDB TTL index can expire docs
+    expire_at = datetime.utcnow() + timedelta(seconds=TTL_SECONDS)
+    db[COLLECTION_NAME].insert_one({"key": key, "expireAt": expire_at})

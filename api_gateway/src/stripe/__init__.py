@@ -1,9 +1,8 @@
-# Stripe integration package 
-# Import settings early – this will raise ValidationError on startup if required
-# environment variables (e.g. PRICE_* ids) are missing, ensuring fail-fast.
-from .config import get_settings  # noqa: F401
+"""Stripe integration package.
 
-# Initialise settings to trigger validation
-_settings = get_settings()
+Keep this __init__ lightweight to avoid circular imports and early environment
+validation. Import specific symbols from submodules where needed, e.g.:
+`from .routes import router`.
+"""
 
-from .routes import router  # noqa 
+__all__ = []

@@ -1,55 +1,49 @@
 import stripe
 from ..client import get_stripe
-from ..schemas import BillingCycle
 from ...billing.schema import UserRole
 from ..config import get_settings
 from ..idempotency import generate
 
 settings = get_settings()
+# Note: Checkout uses INTRO prices only, taken from StripeSettings
+# (IND_*_INTRO_MONTHLY). Recurring pricing is configured via Subscription
+# Schedules in the webhook handler and does not affect this mapping.
 stripe = get_stripe()
 
-PRICE_MAP = {
-    # Hospital prices
-    # (UserRole.HOSPITAL.value, "lite", BillingCycle.MONTHLY): settings.PRICE_HOSP_LITE_MONTHLY,
-    # (UserRole.HOSPITAL.value, "lite", BillingCycle.YEARLY): settings.PRICE_HOSP_LITE_YEARLY,
-    # (UserRole.HOSPITAL.value, "pro", BillingCycle.MONTHLY): settings.PRICE_HOSP_PRO_MONTHLY,
-    # (UserRole.HOSPITAL.value, "pro", BillingCycle.YEARLY): settings.PRICE_HOSP_PRO_YEARLY,
-
-    # Individual prices
-    (UserRole.INDIVIDUAL.value, "lite", BillingCycle.MONTHLY): settings.PRICE_IND_LITE_MONTHLY,
-    (UserRole.INDIVIDUAL.value, "lite", BillingCycle.YEARLY): settings.PRICE_IND_LITE_YEARLY,
-    (UserRole.INDIVIDUAL.value, "pro", BillingCycle.MONTHLY): settings.PRICE_IND_PRO_MONTHLY,
-    (UserRole.INDIVIDUAL.value, "pro", BillingCycle.YEARLY): settings.PRICE_IND_PRO_YEARLY,
+INTRO_PRICE_MAP = {
+    # Individuals — intro month prices only (month-based plans)
+    (UserRole.INDIVIDUAL.value, "one_month"): settings.IND_1M_INTRO_MONTHLY,
+    (UserRole.INDIVIDUAL.value, "three_months"): settings.IND_3M_INTRO_MONTHLY,
+    (UserRole.INDIVIDUAL.value, "six_months"): settings.IND_6M_INTRO_MONTHLY,
 }
+def create_checkout_session(*, user, plan_type: str) -> dict:
+    role_value = user.role.value if hasattr(user, "role") else str(user.role)
+    key = (role_value, plan_type)
+    if key not in INTRO_PRICE_MAP:
+        raise ValueError(f"Intro price mapping not found for {key}. Check IND_*_INTRO_MONTHLY environment variables.")
 
-def create_checkout_session(*, user, plan_type: str, billing_cycle: BillingCycle) -> str:
-    key = (user.role.value if hasattr(user, 'role') else user.role, plan_type, billing_cycle)
-    if key not in PRICE_MAP:
-        raise ValueError(f"Price mapping not found for {key}. Check environment variables.")
-
-    price_id = PRICE_MAP[key]
+    price_id = INTRO_PRICE_MAP[key]
     # Generate a unique idempotency key per checkout attempt to avoid reusing an old
     # finished Checkout Session which would display a completion/timed-out message.
     # We include the user id and current timestamp so retries within a short period
     # (e.g., page refresh) still map to the same attempt, but subsequent fresh
     # purchase flows generate a brand-new session.
     import time, uuid
-    idem_key = generate("checkout", user.user_id, plan_type, billing_cycle, str(time.time()), uuid.uuid4().hex)
+    idem_key = generate("checkout", user.user_id, plan_type, str(time.time()), uuid.uuid4().hex)
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=f"{settings.SUCCESS_URL}?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{settings.CANCEL_URL}",
         customer_email=user.email,
-        client_reference_id=f"{user.role}:{user.role_entity_id}",
+        client_reference_id=f"{role_value}:{user.role_entity_id}",
         metadata={
-            "role": user.role,
+            "role": role_value,
             "role_entity_id": user.role_entity_id,
-            "plan": plan_type,
-            "billing_cycle": billing_cycle,
+            "plan_type": plan_type,
         },
         payment_method_options={"card": {"request_three_d_secure": "any"}},
         automatic_tax={"enabled": True},
         idempotency_key=idem_key,
     )
-    return session.url 
+    return {"id": session.id, "url": session.url}

@@ -15,47 +15,14 @@ from .schema import (
 )
 from ...database.db import get_database
 from ...utils.helperFunctions import generate_unique_id
+from ..stripe.audit import log
 
-# REPLACE existing PLAN_CONFIGS and PLAN_DETAILS definitions with role-specific dictionaries to avoid key collisions and allow LITE/PRO for both roles
-# Hospital-specific configurations
-PLAN_CONFIGS_HOSPITAL = {
-    PlanType.LITE: {
-        "max_agents": 5,
-        "available_services": [
-            "privacy", 
-            "human_escalation", 
-            "checklist", 
-            "medication", 
-            "nutrition"
-        ],
-        "memory_stack": ["standard"],
-        "summarizer_available": False,
-        "human_escalation_available": False,
-        "model_tier": "basic",
-        "max_context_length": 2000,
-        "rate_limit_per_minute": 60,
-    },
-    PlanType.PRO: {
-        "max_agents": 50,
-        "available_services": [
-            "privacy", 
-            "human_escalation", 
-            "checklist", 
-            "medication", 
-            "nutrition"
-        ],
-        "memory_stack": ["premium"],
-        "summarizer_available": True,
-        "human_escalation_available": True,
-        "model_tier": "premium",
-        "max_context_length": 8000,
-        "rate_limit_per_minute": 300,
-    },
-}
+# Hospital billing disabled for current release; keep placeholders to avoid import-time enum errors
+PLAN_CONFIGS_HOSPITAL: Dict[Any, Any] = {}
 
-# Individual-specific configurations
+# Individual-specific configurations (Leapply-style plans)
 PLAN_CONFIGS_INDIVIDUAL = {
-    PlanType.LITE: {
+    PlanType.ONE_MONTH: {
         "max_agents": 1,
         "available_services": ["basic_service"],
         "memory_stack": ["standard"],
@@ -65,8 +32,8 @@ PLAN_CONFIGS_INDIVIDUAL = {
         "max_context_length": 1000,
         "rate_limit_per_minute": 30,
     },
-    PlanType.PRO: {
-        "max_agents": 2,
+    PlanType.THREE_MONTHS: {
+        "max_agents": 1,
         "available_services": ["basic_service"],
         "memory_stack": ["standard"],
         "summarizer_available": True,
@@ -75,70 +42,79 @@ PLAN_CONFIGS_INDIVIDUAL = {
         "max_context_length": 4000,
         "rate_limit_per_minute": 120,
     },
-}
-
-# Hospital-specific display details
-PLAN_DETAILS_HOSPITAL = {
-    PlanType.LITE: {
-        "name": "Lite Plan (Hospital)",
-        "description": "Essential features for small healthcare organizations",
-        "price_monthly": 499.0,
-        "price_yearly": 4790.40,
-        "max_agents": 5,
-        "features": [
-            "Basic patient management",
-            "Standard memory stack",
-            "Limited API access",
-            "Email support",
-        ],
-        "model_tier": ModelTier.GEMINI_1_5,
-    },
-    PlanType.PRO: {
-        "name": "Pro Plan (Hospital)",
-        "description": "Advanced features for growing healthcare organizations",
-        "price_monthly": 999.0,
-        "price_yearly": 9590.40,
-        "max_agents": 50,
-        "features": [
-            "Advanced patient management",
-            "Premium memory stack",
-            "Unlimited API access",
-            "Priority support",
-            "Custom integrations",
-        ],
-        "model_tier": ModelTier.GEMINI_1_5,
-        "is_recommended": True,
+    PlanType.SIX_MONTHS: {
+        "max_agents": 2,
+        "available_services": ["basic_service"],
+        "memory_stack": ["premium"],
+        "summarizer_available": True,
+        "human_escalation_available": False,
+        "model_tier": "advanced",
+        "max_context_length": 8000,
+        "rate_limit_per_minute": 180,
     },
 }
 
-# Individual-specific display details
+PLAN_DETAILS_HOSPITAL: Dict[Any, Any] = {}
+
+# Individual-specific display details (Leapply-style cards)
 PLAN_DETAILS_INDIVIDUAL = {
-    PlanType.LITE: {
-        "name": "Lite Plan (Individual)",
-        "description": "Standard features for individual healthcare providers",
-        "price_monthly": 49.0,
-        "price_yearly": 470.40,
+    PlanType.ONE_MONTH: {
+        "name": "1 Month Plan",
+        "description": "Short commitment with full access for individuals.",
+        # Legacy fields kept as None
+        "price_monthly": None,
+        "price_yearly": None,
+        # Display fields
+        "intro_price": 19.99,
+        "recurring_price": 29.99,
+        "recurring_interval_label": "every 1 month",
+        "per_day_text": "$1.00 per day",
+    "legal_disclaimer": "By clicking 'Get my plan', you agree to automatic renewal. First 1 month at $19.99, then $29.99 every 1 month (prices excl. VAT).",
+        "is_most_popular": False,
+        # Capabilities snapshot for card
         "max_agents": 1,
         "features": [
-            "Standard patient management",
+            "Standard access",
             "Basic memory stack",
-            "Standard API access",
             "Email support",
         ],
         "model_tier": ModelTier.GEMINI_1_5,
-        "is_recommended": True,
     },
-    PlanType.PRO: {
-        "name": "Pro Plan (Individual)",
-        "description": "Extra capacity for busy individual practitioners",
-        "price_monthly": 99.0,
-        "price_yearly": 950.40,
+    PlanType.THREE_MONTHS: {
+        "name": "3 Months Plan",
+        "description": "Best value balance and most popular among individuals.",
+        "price_monthly": None,
+        "price_yearly": None,
+        "intro_price": 49.99,
+        "recurring_price": 29.99,
+        "recurring_interval_label": "every 1 month",
+        "per_day_text": "$0.70 per day",
+    "legal_disclaimer": "By clicking 'Get my plan', you agree to automatic renewal. First 3 months at $49.99 per month, then $29.99 every 1 month (prices excl. VAT).",
+        "is_most_popular": True,
+        "max_agents": 1,
+        "features": [
+            "Advanced access",
+            "Standard memory stack",
+            "Priority email support",
+        ],
+        "model_tier": ModelTier.GEMINI_1_5,
+    },
+    PlanType.SIX_MONTHS: {
+        "name": "6 Months Plan",
+        "description": "Longest commitment with the lowest daily price.",
+        "price_monthly": None,
+        "price_yearly": None,
+        "intro_price": 79.99,
+        "recurring_price": 29.99,
+        "recurring_interval_label": "every 1 month",
+        "per_day_text": "$0.50 per day",
+    "legal_disclaimer": "By clicking 'Get my plan', you agree to automatic renewal. First 6 months at $79.99 per month, then $29.99 every 1 month (prices excl. VAT).",
+        "is_most_popular": False,
         "max_agents": 2,
         "features": [
-            "Basic patient management",
-            "Limited memory stack",
-            "Restricted API access",
-            "Community support",
+            "Advanced access",
+            "Premium memory stack",
+            "Priority support",
         ],
         "model_tier": ModelTier.GEMINI_1_5,
     },
@@ -147,13 +123,15 @@ PLAN_DETAILS_INDIVIDUAL = {
 # Helper that returns correct config/detail dict based on user role
 ROLE_CONFIG_MAP = {
     # UserRole.HOSPITAL: PLAN_CONFIGS_HOSPITAL,
-    UserRole.ADMIN: PLAN_CONFIGS_HOSPITAL,  # admins manage hospitals too
+    # For this release, admins see individual plans
+    UserRole.ADMIN: PLAN_CONFIGS_INDIVIDUAL,
     UserRole.INDIVIDUAL: PLAN_CONFIGS_INDIVIDUAL,
 }
 
 ROLE_DETAILS_MAP = {
     # UserRole.HOSPITAL: PLAN_DETAILS_HOSPITAL,
-    UserRole.ADMIN: PLAN_DETAILS_HOSPITAL,
+    # For this release, admins see individual plan details
+    UserRole.ADMIN: PLAN_DETAILS_INDIVIDUAL,
     UserRole.INDIVIDUAL: PLAN_DETAILS_INDIVIDUAL,
 }
 
@@ -195,8 +173,14 @@ class BillingController:
             # Get the plan details for display
             plan_type = individual_plan.get("plan_type")
             plan_details = None
-            if plan_type and plan_type in PLAN_DETAILS_INDIVIDUAL:
-                plan_details = PLAN_DETAILS_INDIVIDUAL[PlanType(plan_type)]
+            if plan_type:
+                try:
+                    plan_enum = PlanType(plan_type)  # type: ignore[arg-type]
+                    if plan_enum in PLAN_DETAILS_INDIVIDUAL:
+                        plan_details = PLAN_DETAILS_INDIVIDUAL[plan_enum]
+                except Exception:
+                    # Ignore legacy values like 'lite'/'pro' that are not part of new PlanType
+                    plan_details = None
 
             # Return the response
             return IndividualPlanResponse(
@@ -275,10 +259,27 @@ class BillingController:
                     {"$set": plan_data}
                 )
                 plan_data["id"] = existing_plan["id"]
+                try:
+                    log("plan_updated", {
+                        "individual_id": individual_id,
+                        "old_plan_type": old_plan_type,
+                        "new_plan_type": plan_type.value,
+                        "changed_by": user_id,
+                    }, "ok")
+                except Exception:
+                    pass
             else:
                 # Create new plan
                 plan_data["id"] = generate_unique_id("plan")
                 self.db.plans.insert_one(plan_data)
+                try:
+                    log("plan_created", {
+                        "individual_id": individual_id,
+                        "plan_type": plan_type.value,
+                        "created_by": user_id,
+                    }, "ok")
+                except Exception:
+                    pass
 
             # Update individual's plan reference
             self.db.individuals.update_one(
@@ -288,6 +289,13 @@ class BillingController:
                     "updated_at": current_time
                 }}
             )
+            try:
+                log("individual_plan_ref_updated", {
+                    "individual_id": individual_id,
+                    "plan_type": plan_type.value,
+                }, "ok")
+            except Exception:
+                pass
 
             # Get the plan details for display
             plan_details = None
@@ -332,9 +340,14 @@ class BillingController:
         try:
             # Determine available plans and detail dictionary based on role
             if user_role == UserRole.ADMIN:
-                available_plan_types = [PlanType.LITE, PlanType.PRO]
+                # Admin: show individual catalog as well (no hospital billing this release)
+                available_plan_types = [
+                    PlanType.ONE_MONTH, PlanType.THREE_MONTHS, PlanType.SIX_MONTHS
+                ]
             elif user_role == UserRole.INDIVIDUAL:
-                available_plan_types = [PlanType.LITE, PlanType.PRO]
+                available_plan_types = [
+                    PlanType.ONE_MONTH, PlanType.THREE_MONTHS, PlanType.SIX_MONTHS
+                ]
             else:
                 available_plan_types = []
 
@@ -346,7 +359,11 @@ class BillingController:
                 if user_role == UserRole.INDIVIDUAL:
                     plan_record = self.db.plans.find_one({"individual_id": role_entity_id})
                     if plan_record and "plan_type" in plan_record:
-                        current_plan = PlanType(plan_record["plan_type"])
+                        # Safely parse current plan; ignore legacy values like 'lite'/'pro'
+                        try:
+                            current_plan = PlanType(plan_record["plan_type"])  # type: ignore[arg-type]
+                        except Exception:
+                            current_plan = None
 
             current_plan_details = None
             if current_plan and current_plan in plan_detail_source:
@@ -373,12 +390,19 @@ class BillingController:
                             plan_type=plan_type,
                             name=pd["name"],
                             description=pd["description"],
-                            price_monthly=pd["price_monthly"],
-                            price_yearly=pd["price_yearly"],
+                            price_monthly=pd.get("price_monthly"),
+                            price_yearly=pd.get("price_yearly"),
                             max_agents=pd["max_agents"],
                             features=pd["features"],
                             model_tier=pd["model_tier"],
                             is_recommended=pd.get("is_recommended", False),
+                            # New fields
+                            intro_price=pd.get("intro_price"),
+                            recurring_price=pd.get("recurring_price"),
+                            recurring_interval_label=pd.get("recurring_interval_label"),
+                            per_day_text=pd.get("per_day_text"),
+                            legal_disclaimer=pd.get("legal_disclaimer"),
+                            is_most_popular=pd.get("is_most_popular", False),
                         )
                     )
 

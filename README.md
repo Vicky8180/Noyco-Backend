@@ -305,3 +305,47 @@ For support and questions:
 - Real-time communication support
 - Multi-agent specialist system
 - Comprehensive memory management
+
+---
+
+## Stripe configuration (Leapply-style plans)
+
+Set the following environment variables for the API Gateway service (FastAPI):
+
+- STRIPE_SECRET_KEY
+- STRIPE_PUBLISHABLE_KEY
+- STRIPE_WEBHOOK_SECRET
+- STRIPE_SUCCESS_URL
+- STRIPE_CANCEL_URL
+- IND_1M_INTRO_MONTHLY
+- IND_3M_INTRO_MONTHLY
+- IND_6M_INTRO_MONTHLY
+- IND_1M_RECUR_MONTHLY
+- IND_3M_RECUR_MONTHLY
+- IND_6M_RECUR_MONTHLY
+
+These IND_* variables are the Stripe Price IDs for the introductory period and the recurring monthly phases of the 1-month, 3-months, and 6-months plans. You can keep three distinct monthly recurring price IDs at the same amount (e.g., $29.99) for future flexibility.
+
+Note: Week-based env variables (IND_4W_*, IND_12W_*, IND_24W_*) have been fully removed. Use the month-based IND_1M_*, IND_3M_*, IND_6M_* variables only.
+
+Frontend (Next.js) must set:
+
+- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
+Customer Portal (optional): To avoid breaking the Subscription Schedules created after Checkout, configure the Stripe Customer Portal to restrict plan switching. Allow payment method updates and cancellation, but disable price changes.
+
+### MongoDB migration: rename legacy plan_type values
+
+Run this once to rename existing week-based plan values to month-based ones in your database:
+
+- four_week -> one_month
+- twelve_week -> three_months
+- twenty_four_week -> six_months
+
+Steps on Windows PowerShell:
+
+1. Ensure your API Gateway .env is configured and accessible.
+2. From the `Noyco-Backend` folder, run:
+  - python -m api_gateway.scripts.migrate_plan_types_months
+
+The script is idempotent and updates the `plans` and `individuals` collections, and best-effort adjusts `stripe_audit` if present.
