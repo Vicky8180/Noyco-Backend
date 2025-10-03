@@ -340,8 +340,7 @@ class JWTAuthController:
             samesite=self.cookie_samesite,
             domain=self.cookie_domain,
             max_age=self.access_token_expire_minutes * 60,
-            path="/",
-            domain=self.cookie_domain
+            path="/"
         )
 
         # Refresh token cookie - long lived, httpOnly
@@ -353,8 +352,7 @@ class JWTAuthController:
             samesite=self.cookie_samesite,
             domain=self.cookie_domain,
             max_age=self.refresh_token_expire_days * 24 * 60 * 60,
-            path="/",
-            domain=self.cookie_domain
+            path="/"
         )
 
         # CSRF token cookie - using dedicated CSRF cookie settings
@@ -366,8 +364,7 @@ class JWTAuthController:
             samesite=self.csrf_cookie_samesite,
             domain=self.cookie_domain,
             max_age=self.access_token_expire_minutes * 60,
-            path="/",
-            domain=self.cookie_domain
+            path="/"
         )
 
         return csrf_token
@@ -379,8 +376,7 @@ class JWTAuthController:
             path="/",
             domain=self.cookie_domain,
             secure=self.secure_cookie,
-            httponly=True,
-            domain=self.cookie_domain
+            httponly=True
         )
 
         response.delete_cookie(
@@ -388,8 +384,7 @@ class JWTAuthController:
             path="/",
             domain=self.cookie_domain,
             secure=self.secure_cookie,
-            httponly=True,
-            domain=self.cookie_domain
+            httponly=True
         )
 
         response.delete_cookie(
