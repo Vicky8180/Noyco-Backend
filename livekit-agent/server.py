@@ -9,6 +9,7 @@ import os
 import sys
 import signal
 import threading
+import time
 from aiohttp import web
 from config import get_settings
 
@@ -25,6 +26,7 @@ settings = get_settings()
 agent_thread = None
 agent_started = False
 agent_running = False
+shutdown_requested = False
 
 
 class AgentServer:
@@ -39,36 +41,42 @@ class AgentServer:
     
     async def health_check(self, request):
         """Health check endpoint for Cloud Run"""
-        global agent_started, agent_running, agent_thread
+        global agent_started, agent_running, agent_thread, shutdown_requested
         thread_alive = agent_thread.is_alive() if agent_thread else False
         
         return web.json_response({
-            'status': 'healthy',
+            'status': 'healthy' if not shutdown_requested else 'shutting_down',
             'service': 'livekit-agent',
             'agent_started': agent_started,
-            'agent_running': agent_running and thread_alive
+            'agent_running': agent_running and thread_alive,
+            'shutdown_requested': shutdown_requested
         })
     
     def start_agent_thread(self):
         """Start the LiveKit agent in a separate thread"""
-        global agent_thread, agent_started, agent_running
+        global agent_thread, agent_started, agent_running, shutdown_requested
         
         def run_agent():
             """Run the LiveKit agent in a thread"""
-            global agent_running
+            global agent_running, shutdown_requested
             try:
                 agent_running = True
                 logger.info("🚀 Starting LiveKit agent worker...")
                 # Run the LiveKit agent using cli.run_app
                 cli.run_app(WorkerOptions(entrypoint_fnc=agent_entrypoint))
+            except KeyboardInterrupt:
+                logger.info("⚠️ Agent received keyboard interrupt")
             except Exception as e:
-                logger.error(f"❌ Agent error: {e}", exc_info=True)
+                if not shutdown_requested:
+                    logger.error(f"❌ Agent error: {e}", exc_info=True)
+                else:
+                    logger.info(f"⚠️ Agent stopped during shutdown: {e}")
             finally:
                 agent_running = False
                 logger.info("🛑 Agent thread stopped")
         
         try:
-            agent_thread = threading.Thread(target=run_agent, daemon=True)
+            agent_thread = threading.Thread(target=run_agent, daemon=False, name="LiveKitAgentThread")
             agent_thread.start()
             agent_started = True
             logger.info("✅ LiveKit agent thread started")
@@ -78,6 +86,7 @@ class AgentServer:
     
     async def run(self):
         """Run both the HTTP server and LiveKit agent"""
+        global shutdown_requested
         port = int(os.getenv('PORT', 8080))
         
         # Start the LiveKit agent in background thread
@@ -99,7 +108,9 @@ class AgentServer:
         shutdown_event = asyncio.Event()
         
         def signal_handler(signum):
-            logger.info(f"📡 Received signal {signum}, shutting down...")
+            global shutdown_requested
+            logger.info(f"📡 Received signal {signum}, initiating graceful shutdown...")
+            shutdown_requested = True
             shutdown_event.set()
         
         # Register signal handlers
@@ -112,15 +123,29 @@ class AgentServer:
             await shutdown_event.wait()
         except asyncio.CancelledError:
             logger.info("🛑 Server cancelled, shutting down...")
+            shutdown_requested = True
         finally:
             # Cleanup
             global agent_thread, agent_running
-            if agent_thread and agent_thread.is_alive():
-                logger.info("🛑 Waiting for agent thread to finish...")
-                agent_running = False
-                # Agent thread is daemon, so it will be terminated when main thread exits
             
+            logger.info("🧹 Starting server cleanup...")
+            
+            # Mark as shutting down
+            agent_running = False
+            
+            # Wait for agent thread to finish gracefully (with timeout)
+            if agent_thread and agent_thread.is_alive():
+                logger.info("⏳ Waiting for agent thread to finish (max 10 seconds)...")
+                agent_thread.join(timeout=10.0)
+                
+                if agent_thread.is_alive():
+                    logger.warning("⚠️ Agent thread did not finish in time, proceeding with shutdown")
+                else:
+                    logger.info("✅ Agent thread finished cleanly")
+            
+            # Cleanup HTTP server
             await runner.cleanup()
+            logger.info("✅ Server cleanup complete")
             logger.info("👋 Shutdown complete")
 
 
