@@ -47,6 +47,7 @@ class NoycoAssistant(Agent):
         self.ws_lock = asyncio.Lock()
         self.audio_source = None  # For typing sound playback
         self._room_instance = None  # Store room for data channel access
+        self._is_shutting_down = False  # Track shutdown state
         
         # Get API keys from settings
         elevenlabs_key = settings.ELEVENLABS_API_KEY
@@ -118,6 +119,7 @@ class NoycoAssistant(Agent):
     
     async def close_websocket(self):
         """Close WebSocket connection"""
+        self._is_shutting_down = True
         async with self.ws_lock:
             if self.websocket:
                 try:
@@ -132,6 +134,11 @@ class NoycoAssistant(Agent):
     async def _send_message_to_frontend(self, text: str, sender: str):
         """Send message to frontend via LiveKit data channel"""
         try:
+            # Check if shutting down
+            if self._is_shutting_down:
+                logger.debug("⚠️ Skipping message send - assistant is shutting down")
+                return
+            
             # Check if we have access to the room
             if not hasattr(self, '_room_instance') or self._room_instance is None:
                 logger.warning(f"Cannot send message - room not available yet")
@@ -217,6 +224,11 @@ class NoycoAssistant(Agent):
         Called when the user finishes speaking.
         This is where we intercept user input and send it to our backend.
         """
+        # Check if shutting down
+        if self._is_shutting_down:
+            logger.info("⚠️ Ignoring user turn - assistant is shutting down")
+            raise StopResponse()
+        
         # Extract user's text
         user_text = new_message.text_content
         
@@ -278,6 +290,11 @@ class NoycoAssistant(Agent):
     async def _get_backend_response(self, user_text: str) -> str:
         """Get response from Noyco backend via WebSocket (with HTTP fallback)"""
         
+        # Check if shutting down
+        if self._is_shutting_down:
+            logger.info("⚠️ Skipping backend request - assistant is shutting down")
+            return "I'm disconnecting now. Thank you for talking with me!"
+        
         # Try WebSocket first
         if self.ws_connected and self.websocket:
             try:
@@ -324,13 +341,19 @@ class NoycoAssistant(Agent):
         
         # HTTP fallback (or primary if WebSocket not connected)
         try:
+            # Build payload, only including fields that have values
             payload = {
                 "session_id": self.session_data.get("session_id"),
                 "text": user_text,
-                "conversation_id": self.session_data.get("conversation_id"),
-                "individual_id": self.session_data.get("individual_id"),
-                "user_profile_id": self.session_data.get("user_profile_id"),
             }
+            
+            # Add optional fields only if they exist and are not None
+            if self.session_data.get("conversation_id"):
+                payload["conversation_id"] = self.session_data.get("conversation_id")
+            if self.session_data.get("individual_id"):
+                payload["individual_id"] = self.session_data.get("individual_id")
+            if self.session_data.get("user_profile_id"):
+                payload["user_profile_id"] = self.session_data.get("user_profile_id")
             
             logger.info(f"➡️ Sending via HTTP: '{user_text[:100]}...'")
             
@@ -425,7 +448,7 @@ async def entrypoint(ctx: JobContext):
     
     # Create AgentSession with VAD for turn detection
     # Configure VAD with longer patience to allow natural pauses in speech
-    session = AgentSession(
+    agent_session = AgentSession(
         vad=silero.VAD.load(
             min_speech_duration=settings.VAD_MIN_SPEECH_DURATION,
             min_silence_duration=settings.VAD_MIN_SILENCE_DURATION,
@@ -442,43 +465,77 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"✅ Backend: {backend_url}")
     logger.info(f"✅ Session ID: {session_data.get('session_id', 'Unknown')}")
     
+    # Track if session is shutting down
+    is_shutting_down = False
+    shutdown_lock = asyncio.Lock()
+    
     try:
         # Store room instance in assistant for message sending
         assistant._room_instance = ctx.room
         
         # Start the session
-        await session.start(room=ctx.room, agent=assistant)
+        await agent_session.start(room=ctx.room, agent=assistant)
         
         logger.info("=== 🚀 SESSION STARTED ===")
         
         # Send initial greeting
         try:
             greeting_response = await assistant._get_backend_response("__INITIAL_GREETING__")
-            session.say(greeting_response)
+            agent_session.say(greeting_response)
             logger.info("✅ Initial greeting sent")
         except Exception as greeting_error:
             logger.error(f"Error sending greeting: {greeting_error}")
-            session.say("Hello! I'm Noyco, your voice assistant. How can I help you today?")
+            agent_session.say("Hello! I'm Noyco, your voice assistant. How can I help you today?")
         
         logger.info("🎯 Listening for user speech...")
         
         # Wait for disconnection
-        disconnected_future = asyncio.Future()
+        disconnected_event = asyncio.Event()
         
         @ctx.room.on("disconnected")
         def on_disconnected():
-            logger.info("🚪 Room disconnected")
-            if not disconnected_future.done():
-                disconnected_future.set_result(True)
+            logger.info("🚪 Room disconnected event received")
+            disconnected_event.set()
         
-        await disconnected_future
+        # Keep the session alive until disconnection
+        await disconnected_event.wait()
         
+        # Begin graceful shutdown
+        async with shutdown_lock:
+            if not is_shutting_down:
+                is_shutting_down = True
+                logger.info("🛑 Starting graceful shutdown...")
+                
+                # Give a moment for any in-flight operations to complete
+                await asyncio.sleep(0.5)
+                
+    except asyncio.CancelledError:
+        logger.info("⚠️ Entrypoint cancelled")
+        async with shutdown_lock:
+            is_shutting_down = True
+        raise
     except Exception as e:
-        logger.error(f"Session error: {e}", exc_info=True)
+        logger.error(f"❌ Session error: {e}", exc_info=True)
     finally:
-        # Close WebSocket connection
-        await assistant.close_websocket()
-        logger.info("🛑 Session ended")
+        # Ensure cleanup happens only once
+        async with shutdown_lock:
+            if not is_shutting_down:
+                is_shutting_down = True
+            
+            logger.info("🧹 Starting cleanup...")
+            
+            # Close WebSocket connection with timeout
+            try:
+                await asyncio.wait_for(assistant.close_websocket(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning("WebSocket close timeout")
+            except Exception as cleanup_error:
+                logger.error(f"Error during WebSocket cleanup: {cleanup_error}")
+            
+            # Give a moment for any remaining tasks to finish
+            await asyncio.sleep(0.5)
+            
+            logger.info("✅ Session cleanup completed")
 
 
 if __name__ == "__main__":
