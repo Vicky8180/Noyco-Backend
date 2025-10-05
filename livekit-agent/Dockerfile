@@ -67,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 8080
 
 # Run the multi-tenant server
-CMD ["python", "server_multitenant.py", "start"]
+CMD ["python", "server.py", "start"]
