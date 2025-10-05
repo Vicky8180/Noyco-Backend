@@ -24,7 +24,7 @@ load_dotenv()
 app = APIRouter(prefix="/initial", tags=["Initial Call Handler"])
 
 # Initialize components
-GEMINI_API_KEY = "AIzaSyBHlMf_Ri8w8QT1ClQwS1ZBkgzLskbh4ZQ"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is required")
 

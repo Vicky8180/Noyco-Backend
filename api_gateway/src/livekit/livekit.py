@@ -458,7 +458,8 @@ async def process_voice_message(request: VoiceMessageRequest):
                     "intent_detected": False,
                     "context_history": [],
                     "detected_intent": None,
-                    "selected_agent": None
+                    "selected_agent": None,
+                    "created_at": datetime.utcnow().isoformat()  # Add created_at field
                 }
             }
             active_voice_sessions[request.session_id] = session_data
