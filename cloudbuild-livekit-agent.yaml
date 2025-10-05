@@ -43,6 +43,8 @@ steps:
       - '1Gi' 
       - '--cpu'
       - '1'
+      - '--min-instances'
+      - '1'
       - '--max-instances'
       - '3' 
       - '--concurrency'
