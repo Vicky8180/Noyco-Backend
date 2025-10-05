@@ -44,9 +44,9 @@ steps:
       - '--cpu'
       - '1'
       - '--max-instances'
-      - '10' 
+      - '3' 
       - '--concurrency'
-      - '1' 
+      - '80' 
       - '--timeout'
       - '3600'
       - '--no-cpu-throttling'
@@ -59,6 +59,7 @@ steps:
       - 'gen2'
       - '--update-secrets'
       - conversationalengine-secrets=conversationalengine-secrets:latest
+      - '--cpu-boost'
 
 images:
   - '${_REGION}-docker.pkg.dev/noyco-473111/${_ARTIFACT_REGISTRY_REPO}/${_SERVICE_NAME}:$COMMIT_SHA'
