@@ -208,6 +208,7 @@ class MultiTenantAgentServer:
     def setup_routes(self):
         """Setup HTTP routes"""
         self.app.router.add_get('/health', self.health_check)
+        self.app.router.add_get('/warmup', self.warmup)
         self.app.router.add_get('/', self.root)
         self.app.router.add_get('/sessions', self.list_sessions)
         self.app.router.add_get('/metrics', self.get_metrics)
@@ -225,6 +226,11 @@ class MultiTenantAgentServer:
             'shutdown_requested': shutdown_requested,
             'uptime_seconds': (datetime.utcnow() - self.start_time).total_seconds()
         })
+    
+    async def warmup(self, request):
+        """Simple endpoint to warm up a cold instance"""
+        logger.info("✅ Received warmup request, instance is active.")
+        return web.json_response({'status': 'warmed_up'})
     
     async def root(self, request):
         """Root endpoint"""

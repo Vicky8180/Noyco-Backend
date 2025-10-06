@@ -71,7 +71,7 @@ class LiveKitAgentSettings(BaseSettings):
     
     # VAD (Voice Activity Detection) Settings
     VAD_MIN_SPEECH_DURATION: float = 0.3  # Minimum speech duration in seconds
-    VAD_MIN_SILENCE_DURATION: float = 0.8  # Minimum silence to end turn
+    VAD_MIN_SILENCE_DURATION: float = 1.2  # Minimum silence to end turn
     VAD_PADDING_DURATION: float = 0.3      # Padding around speech segments
     VAD_ACTIVATION_THRESHOLD: float = 0.5  # Sensitivity (0.0-1.0)
     
