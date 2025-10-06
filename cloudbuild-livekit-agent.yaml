@@ -55,8 +55,6 @@ steps:
       - '--port'
       - '8080'
       - '--session-affinity'
-      - '--min-instances'
-      - '0'
       - '--execution-environment'
       - 'gen2'
       - '--update-secrets'
