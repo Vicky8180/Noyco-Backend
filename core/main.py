@@ -52,8 +52,26 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager for the core service."""
     logger.info("Starting Core Service...")
+    
+    # Initialize memory manager
+    try:
+        from .memory.memory_manager import get_memory_manager
+        memory_manager = get_memory_manager()
+        await memory_manager.initialize()
+        logger.info("✅ Memory Manager initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Memory Manager: {e}")
+    
     yield
+    
+    # Cleanup
     logger.info("Shutting down Core Service...")
+    try:
+        if memory_manager:
+            await memory_manager.close()
+            logger.info("✅ Memory Manager closed")
+    except Exception as e:
+        logger.error(f"❌ Error closing Memory Manager: {e}")
 
 # Create the main FastAPI application
 app = FastAPI(
@@ -82,9 +100,17 @@ app.mount("/checklist", checklist_app)
 @app.get("/health")
 async def health_check():
     """Health check endpoint for the core service"""
+    try:
+        from .memory.memory_manager import get_memory_manager
+        memory_manager = get_memory_manager()
+        memory_health = await memory_manager.health_check()
+    except Exception as e:
+        memory_health = {"error": str(e)}
+    
     return {
         "status": "ok", 
         "service": "core",
+        "memory": memory_health,
         "services": {
             "orchestrator": "mounted at /orchestrator",
             "primary": "mounted at /primary",

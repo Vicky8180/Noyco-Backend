@@ -25,9 +25,11 @@ from concurrent.futures import ThreadPoolExecutor
 if __name__ == "__main__" and __package__ is None:
     from orchestrator.config import get_settings
     from common.models import Conversation, AgentResult, Task, Checkpoint
+    from memory.memory_manager import get_memory_manager
 else:
     from .config import get_settings
     from common.models import Conversation, AgentResult, Task, Checkpoint
+    from ..memory.memory_manager import get_memory_manager
 
 _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -338,15 +340,12 @@ class ConversationState:
             _logger.info(f"✅ Loaded conversation {conversation_id} from cache")
             return instance
 
-        # Fallback to API
+        # Fallback to direct memory access (no HTTP overhead)
         try:
-            await instance._ensure_http_client()
-            resp = await instance._http_client.get(
-                f"{settings.MEMORY_URL}/conversation/{conversation_id}"
-            )
+            memory_manager = get_memory_manager()
+            data = await memory_manager.get_conversation_state(conversation_id)
 
-            if resp.status_code == 200:
-                data = resp.json()
+            if data:
                 instance._load_from_dict(data)
                 instance.is_new = False
 
@@ -354,7 +353,7 @@ class ConversationState:
                 await cache_manager.set(cache_key_str, data)
                 cache_manager.stats.api_calls += 1
 
-                _logger.info(f"✅ Loaded conversation {conversation_id} from API")
+                _logger.info(f"✅ Loaded conversation {conversation_id} from memory")
 
         except Exception as e:
             _logger.warning(f"Could not fetch conversation (will start new): {type(e).__name__}: {str(e)}")
@@ -584,25 +583,19 @@ class ConversationState:
 
         if plan == "pro" and text:
             try:
-                await self._ensure_http_client()
-                response = await self._http_client.post(
-                    f"{settings.MEMORY_URL}/get_semantic_context",
-                    params={
-                        "individual_id": self.individual_id or self.conversation_id,
-                        "query": text,
-                        "limit": 50
-                    },
-                    timeout=5.0
+                memory_manager = get_memory_manager()
+                semantic_result = await memory_manager.get_semantic_context(
+                    conversation_id=self.individual_id or self.conversation_id,
+                    query=text,
+                    plan=plan
                 )
 
-                if response.status_code == 200:
-                    api_response = response.json()
-                    if api_response.get("status") == "success":
-                        cache_manager.stats.api_calls += 1
-                        return api_response.get("context", [])
+                if semantic_result:
+                    cache_manager.stats.api_calls += 1
+                    return semantic_result
 
             except Exception as e:
-                _logger.error(f"Semantic context API error: {e}")
+                _logger.error(f"Semantic context error: {e}")
 
         return self.context[-16:] if len(self.context) > 16 else self.context
 
@@ -621,21 +614,13 @@ class ConversationState:
         asyncio.create_task(self._save_context_async(plan))
 
     async def _save_context_async(self, plan: str):
-        """Async context saving"""
+        """Async context saving using direct memory access"""
         try:
-            await self._ensure_http_client()
-            await self._http_client.post(
-                f"{settings.MEMORY_URL}/conversation/update",
-                json={
-                    "conversation_id": self.conversation_id,
-                    "context": self.context,
-                    "complete_context": self.complete_context,
-                    "individual_id": self.individual_id,
-                    "user_profile_id": self.user_profile_id,
-                    "call_log_id": self.call_log_id,
-                    "plan": plan
-                },
-                timeout=15.0  # Increased timeout for context updates
+            memory_manager = get_memory_manager()
+            await memory_manager.update_conversation_context(
+                conversation_id=self.conversation_id,
+                context=self.context,
+                individual_id=self.individual_id
             )
 
             # Update cache
@@ -684,41 +669,35 @@ class ConversationState:
         asyncio.create_task(self._save_sync_agent_result_async(agent_name, result))
 
     async def _save_agent_result_async(self, agent_result: Dict[str, Any]):
-        """Async agent result saving"""
+        """Async agent result saving using direct memory access"""
         try:
-            await self._ensure_http_client()
-            await self._http_client.post(
-                f"{settings.MEMORY_URL}/conversation/agent_result",
-                params={"conversation_id": self.conversation_id},
-                json=agent_result,
-                timeout=10.0  # Added timeout for agent results
+            memory_manager = get_memory_manager()
+            await memory_manager.save_agent_result(
+                conversation_id=self.conversation_id,
+                agent_name=agent_result["agent_name"],
+                result=agent_result
             )
         except Exception as e:
             _logger.error(f"Failed to save async agent result: {type(e).__name__}: {str(e)}")
-            if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                _logger.error(f"Response content: {e.response.text[:500]}")
 
     async def _save_sync_agent_result_async(self, agent_name: str, result: AgentResult):
-        """Async sync agent result saving"""
+        """Async sync agent result saving using direct memory access"""
         try:
-            await self._ensure_http_client()
-            await self._http_client.post(
-                f"{settings.MEMORY_URL}/conversation/sync_agent_result",
-                params={"conversation_id": self.conversation_id},
-                json={
+            memory_manager = get_memory_manager()
+            await memory_manager.save_sync_agent_result(
+                conversation_id=self.conversation_id,
+                agent_name=agent_name,
+                result={
                     "agent_name": agent_name,
                     "status": result.get("status", "success"),
                     "result_payload": result,
                     "message_to_user": result.get("message_to_user"),
                     "action_required": result.get("action_required", False),
                     "timestamp": datetime.now().isoformat()
-                },
-                timeout=10.0  # Added timeout for sync agent results
+                }
             )
         except Exception as e:
             _logger.error(f"Failed to save sync agent result: {type(e).__name__}: {str(e)}")
-            if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                _logger.error(f"Response content: {e.response.text[:500]}")
 
     def get_async_agent_results(self) -> Dict[str, AgentResult]:
         """Get async agent results"""
@@ -786,60 +765,20 @@ class ConversationState:
                         if "collected_inputs" in checkpoint and isinstance(checkpoint["collected_inputs"], dict):
                             state_dict["task_stack"][i]["checklist"][j]["collected_inputs"] = list(checkpoint["collected_inputs"].keys())
 
-            # Async API save with longer timeout
-            await self._ensure_http_client()
+            # Direct memory save (no HTTP overhead)
+            memory_manager = get_memory_manager()
+            success = await memory_manager.save_conversation_state(state_dict)
             
-            response = await self._http_client.post(
-                f"{settings.MEMORY_URL}/conversation/state",
-                json=state_dict,
-                timeout=20.0  # Increased timeout for state saves
-            )
-            
-            # Check for error responses
-            if response.status_code >= 400:
-                error_detail = "Unknown error"
-                try:
-                    error_detail = response.json()
-                except:
-                    if response.text:
-                        error_detail = response.text[:500]  # Limit text size
-                        
-                _logger.error(f"HTTP error saving conversation state ({response.status_code}): {error_detail}")
-                
-                # If it's a validation error, try to fix common issues and retry
-                if response.status_code == 422 and "string_too_long" in str(error_detail):
-                    _logger.info("Attempting to fix string length issues and retry...")
-                    # Further truncate all checkpoint names as a last resort
-                    for i, task in enumerate(state_dict.get("task_stack", [])):
-                        if "checklist" in task and isinstance(task["checklist"], list):
-                            for j, checkpoint in enumerate(task["checklist"]):
-                                if "name" in checkpoint and isinstance(checkpoint["name"], str) and len(checkpoint["name"]) > 100:
-                                    state_dict["task_stack"][i]["checklist"][j]["name"] = checkpoint["name"][:97] + "..."
-                    
-                    # Try one more time with aggressively truncated strings
-                    retry_response = await self._http_client.post(
-                        f"{settings.MEMORY_URL}/conversation/state",
-                        json=state_dict,
-                        timeout=20.0  # Increased timeout for retries
-                    )
-                    if 200 <= retry_response.status_code < 300:
-                        _logger.info(f"✅ Saved conversation state after retry: {retry_response.status_code}")
-                        self._dirty_fields.clear()
-                        self._last_save_time = now
-                        return
-                    
-                response.raise_for_status()  # Will raise an exception with the status code
-            else:
+            if success:
                 self._dirty_fields.clear()
                 self._last_save_time = now
                 cache_manager.stats.api_calls += 1
-                
-                _logger.info(f"✅ Saved conversation state: {response.status_code}")
+                _logger.info(f"✅ Saved conversation state")
+            else:
+                _logger.error("Failed to save conversation state to memory")
                 
         except Exception as e:
             _logger.error(f"Failed to save conversation state: {type(e).__name__}: {str(e)}")
-            if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                _logger.error(f"Response content: {e.response.text[:500]}")
             # Log the state dict size for debugging
             if 'state_dict' in locals():
                 _logger.error(f"State dict size: {len(str(state_dict))} chars")
@@ -920,19 +859,16 @@ class ConversationState:
 
         _logger.info(f"Updated sync agent checklists - current_task: {self.current_task.get('task_id') if self.current_task else 'None'}")
 
-        # Save updated state to memory service
+        # Save updated state using direct memory access
         try:
             task_stack_serializable = [task.dict() if hasattr(task, 'dict') else task for task in self.task_stack]
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=10.0)) as client:
-                await client.post(
-                    f"{settings.MEMORY_URL}/conversation/update_tasks_stack",
-                    json={
-                        "conversation_id": self.conversation_id,
-                        "task_stack": task_stack_serializable
-                    }
-                )
-                _logger.info(f"Successfully updated sync agent checklists in memory stores")
+            memory_manager = get_memory_manager()
+            await memory_manager.update_task_stack(
+                conversation_id=self.conversation_id,
+                task_stack=task_stack_serializable
+            )
+            _logger.info(f"Successfully updated sync agent checklists in memory stores")
         except Exception as e:
             _logger.error(f"Failed to update sync agent checklists in memory stores: {e!r}")
 
