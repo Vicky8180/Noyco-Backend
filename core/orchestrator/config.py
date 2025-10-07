@@ -39,8 +39,13 @@ class OrchestratorSettings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     
-    # Core Service URLs
-    MEMORY_URL: str 
+    # Database Configuration (for integrated memory service)
+    MONGODB_URI: str
+    DATABASE_NAME: str = "conversionalEngine"
+    REDIS_URL: str
+    
+    # Core Service URLs (MEMORY_URL kept for backward compatibility but not used)
+    MEMORY_URL: str = "http://localhost:8003"  # Deprecated - using direct access now
     CHECKPOINT_URL: str 
     PRIMARY_SERVICE_URL: str 
     

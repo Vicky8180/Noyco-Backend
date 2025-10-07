@@ -12,7 +12,7 @@ services: List[Dict] = [
 
     {"module": "core.main", "port": 8002, "name": "Core Service"},
   
-    {"module": "memory.main", "port": 8010, "name": "Memory Service", "delay": 2},
+    # {"module": "memory.main", "port": 8010, "name": "Memory Service", "delay": 2},
 
     #  Support agents services
     {"module": "specialists.agents.main", "port": 8015, "name": "Agents Specialist"},

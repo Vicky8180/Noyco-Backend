@@ -20,7 +20,7 @@ class HealthMonitor:
         # Define all microservices and their health endpoints using environment variables
         services = {
             "orchestrator": f"{self.settings.ORCHESTRATOR_URL}/health",
-            "memory": f"{self.settings.MEMORY_URL}/health", 
+            # Memory Service is now integrated into Core service, check it via orchestrator
             "checkpoint": f"{self.settings.CHECKPOINT_URL}/health",
         }
         
@@ -262,8 +262,7 @@ class HealthMonitor:
         
         # Define all microservices and their health endpoints using environment variables (excluding self during startup)
         services = {
-            "Orchestrator": f"{self.settings.ORCHESTRATOR_URL}/health",
-            "Memory Service": f"{self.settings.MEMORY_URL}/health", 
+            "Orchestrator (with integrated Memory)": f"{self.settings.ORCHESTRATOR_URL}/health",
             "Checkpoint Service": f"{self.settings.CHECKPOINT_URL}/health",
         }
         
@@ -415,18 +414,8 @@ class HealthMonitor:
         print(f"   • Health Check (Simple): http://{self.settings.SERVICE_HOST}:{self.settings.SERVICE_PORT}/health")
         print(f"   • Health Check (Detailed): http://{self.settings.SERVICE_HOST}:{self.settings.SERVICE_PORT}/health/services")
         print(f"   • API Documentation: http://{self.settings.SERVICE_HOST}:{self.settings.SERVICE_PORT}/docs")
-        print(f"   • LiveKit Voice: http://{self.settings.SERVICE_HOST}:{self.settings.SERVICE_PORT}/api/v1/voice/*")
         print(f"   • Socket.IO: ws://{self.settings.SERVICE_HOST}:{self.settings.SERVICE_PORT}/socket.io/")
         
-        print("\n🎯 Platform Features:")
-        print("   • Authentication & JWT")
-        print("   • Real-time calls & Socket.IO") 
-        print("   • FHIR data conversion")
-        print("   • Medical scan OCR")
-        print("   • Billing & Stripe integration")
-        print("   • Voice assistance (LiveKit)")
-        print("   • Multi-agent conversation system")
-        
         print("\n" + "="*70)
-        print("🚀 API Gateway Ready - Healthcare Platform Operational!")
+        print("🚀 API Gateway Ready")
         print("="*70 + "\n")
