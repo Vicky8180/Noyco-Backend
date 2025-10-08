@@ -560,9 +560,19 @@ async def handle_subscription_updated(event):
         #     )
         # elif role == UserRole.INDIVIDUAL.value:
         if role == UserRole.INDIVIDUAL.value:
+            update_doc = {
+                "status": new_status.value,
+                "last_event_id": event.get("id"),
+                "updated_at": datetime.utcnow(),
+                "cancel_at_period_end": subscription.get("cancel_at_period_end"),
+                "current_period_end": subscription.get("current_period_end"),
+                "stripe_subscription_status": subscription.get("status"),
+            }
+            if subscription.get("cancel_at"):
+                update_doc["cancel_at"] = subscription.get("cancel_at")
             _controller().db.plans.update_one(
                 {"individual_id": role_entity_id},
-                {"$set": {"status": new_status.value, "last_event_id": event.get("id"), "updated_at": datetime.utcnow()}},
+                {"$set": update_doc},
             )
         # Observability
         log("plan_status_transition", {
@@ -595,7 +605,14 @@ async def handle_subscription_deleted(event):
         if role == UserRole.INDIVIDUAL.value:
             _controller().db.plans.update_one(
                 {"individual_id": role_entity_id},
-                {"$set": {"status": PlanStatus.CANCELLED.value, "last_event_id": event.get("id"), "updated_at": datetime.utcnow()}},
+                {"$set": {
+                    "status": PlanStatus.CANCELLED.value,
+                    "last_event_id": event.get("id"),
+                    "updated_at": datetime.utcnow(),
+                    "cancel_at_period_end": False,
+                    "current_period_end": subscription.get("current_period_end"),
+                    "stripe_subscription_status": subscription.get("status"),
+                }},
             )
         log("plan_status_transition", {
             "role": role,
