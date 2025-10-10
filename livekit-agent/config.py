@@ -58,8 +58,9 @@ class LiveKitAgentSettings(BaseSettings):
     # Text-to-Speech Fallback (Cartesia)
     CARTESIA_API_KEY: Optional[str] = None
     
-    # Google API (if needed for additional services)
+    # Google API (Ultimate fallback for STT and TTS)
     GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_CREDENTIALS_PATH: Optional[str] = None  # Path to service account JSON
     
     # Noyco Backend Configuration
     NOYCO_BACKEND_URL: str = "http://localhost:8000"
@@ -70,10 +71,11 @@ class LiveKitAgentSettings(BaseSettings):
     SERVICE_VERSION: str = "1.0.0"
     
     # VAD (Voice Activity Detection) Settings
-    VAD_MIN_SPEECH_DURATION: float = 0.3  # Minimum speech duration in seconds
-    VAD_MIN_SILENCE_DURATION: float = 1.2  # Minimum silence to end turn
-    VAD_PADDING_DURATION: float = 0.3      # Padding around speech segments
-    VAD_ACTIVATION_THRESHOLD: float = 0.5  # Sensitivity (0.0-1.0)
+    # Balanced settings for natural speech + noise filtering
+    VAD_MIN_SPEECH_DURATION: float = 0.4        # Minimum speech duration (filters brief noise)
+    VAD_MIN_SILENCE_DURATION: float = 1.0       # Wait time before ending turn (allows brief pauses)
+    VAD_PADDING_DURATION: float = 0.5           # Padding to capture full words
+    VAD_ACTIVATION_THRESHOLD: float = 0.55      # Sensitivity threshold (0.0-1.0)
     
     # Deepgram STT Settings
     STT_MODEL: str = "nova-2"

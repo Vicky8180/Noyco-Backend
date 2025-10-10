@@ -834,7 +834,7 @@ async def process_message_internal(session_id: str, text: str, session_data: dic
             
             orchestrator_response = await send_to_orchestrator(orchestrator_payload)
             
-            assistant_response = orchestrator_response.get("response", "I'm here to help.") if orchestrator_response else "I'm here to help."
+            assistant_response = orchestrator_response.get("response", "I'm here to help.") if orchestrator_response else "I'm here to help. But right now having some internal problems."
             
             # Update context
             session_data["conversation_state"]["context_history"].append({

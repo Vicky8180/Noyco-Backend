@@ -58,7 +58,9 @@ steps:
       - '--execution-environment'
       - 'gen2'
       - '--update-secrets'
-      - conversationalengine-secrets=conversationalengine-secrets:latest
+      - '/secrets/google-credentials.json=google-stt-tts:latest,conversationalengine-secrets=conversationalengine-secrets:latest'
+      - '--set-env-vars'
+      - 'GOOGLE_CREDENTIALS_PATH=/secrets/google-credentials.json'
       - '--cpu-boost'
 
 images:

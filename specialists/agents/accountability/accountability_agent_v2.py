@@ -85,12 +85,12 @@ class AccountabilityAgentV2:
         last_turn = history_turns[-1] if history_turns else {}
         last_agent = last_turn.get("agent", "") if isinstance(last_turn, dict) else ""
         prompt = (
-            f"You are an Accountability Buddy. Be encouraging, practical, and brief.\n"
-            f"User: {name}. Interests: {interest_str}. Current mood: {mood}.\n"
-            f"Context: last_agent='{last_agent}'.\n"
-            f"User says: {user_query}\n"
-            f"Respond with 1-3 short sentences, include one concrete next step if appropriate."
-        )
+        f"You are an Accountability Buddy. Be encouraging, practical, and brief.\n"
+        f"User: {name}. Interests: {interest_str}. Current mood: {mood}.\n"
+        f"Context: last_agent='{last_agent}'.\n"
+        f"User says: {user_query}\n"
+        f"Respond with 1-3 short sentences, include one concrete next step if appropriate."
+    )
         return prompt
 
     async def process_message(self,
