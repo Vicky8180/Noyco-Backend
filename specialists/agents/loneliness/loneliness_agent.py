@@ -323,7 +323,12 @@ class LonelinessCompanionAgent:
         response_style = self._determine_response_style(user_query)
 
         # Comprehensive prompt
-        main_prompt = f"""You are a warm, empathetic loneliness companion providing passive social therapy and emotional support.
+        main_prompt = f"""You are a warm, empathetic loneliness companion. Your purpose is to provide gentle, proactive emotional support and help the user navigate feelings of loneliness. You are not just a listener; you are a gentle guide.
+
+Your primary interaction model is:
+1.  **Listen & Validate:** First, always acknowledge and validate the user's feelings with deep empathy.
+2.  **Explore & Unpack:** Ask gentle, open-ended questions to help the user explore their feelings more deeply.
+3.  **Guide & Empower:** Help the user discover new perspectives, reframe negative thoughts, and identify small, manageable steps they can take.
 
 ==== USER PROFILE ====
 {user_personality}
@@ -344,7 +349,7 @@ User says: "{user_query}"
 ==== RESPONSE GUIDELINES ====
 {response_style}
 
-Respond naturally as their compassionate companion. Listen actively and provide thoughtful support."""
+Respond as their compassionate companion. Your goal is to not only make them feel heard, but to help them find a path forward, one step at a time."""
 
         return main_prompt
 
@@ -498,32 +503,37 @@ Respond naturally as their compassionate companion. Listen actively and provide 
         
         query_lower = user_query.lower().strip()
         
+        # New Guideline: Handling breakthroughs and insights
+        insight_keywords = ["realize", "realization", "perspective", "makes sense", "never thought", "wow", "i see"]
+        if any(keyword in query_lower for keyword in insight_keywords) and len(user_query.split()) > 5:
+            return "The user had a breakthrough. First, affirm the importance of their insight. Then, ask a question to help them anchor it, like 'How does it feel to see it that way?' or 'What does that realization change for you?' Goal: Help the user integrate their new perspective."
+
         # Short greetings - keep response brief
         short_greetings = ["hi", "hello", "hey", "good morning", "good evening", "good afternoon", "morning", "evening"]
         if any(greeting in query_lower for greeting in short_greetings) and len(user_query.split()) <= 3:
-            return "Keep response brief and warm (1-2 sentences). Match their greeting energy."
+            return "Keep response brief and warm (1-2 sentences). Match their greeting energy. Goal: Invite them to share how they are."
         
         # Questions about feelings or emotional state - more thoughtful response
         emotional_keywords = ["feel", "feeling", "emotion", "sad", "happy", "lonely", "anxious", "depressed", "mood"]
         if any(keyword in query_lower for keyword in emotional_keywords):
-            return "Provide thoughtful, empathetic response (3-5 sentences). Show deep understanding and offer gentle support."
+            return "Provide thoughtful, empathetic response (3-5 sentences). Show deep understanding and validate their feelings. Goal: Ask a gentle, open-ended question to help them explore the 'why' behind the feeling."
         
         # Seeking advice or help - detailed supportive response
         help_keywords = ["help", "advice", "what should", "how do", "can you", "need", "support"]
         if any(keyword in query_lower for keyword in help_keywords):
-            return "Offer detailed, helpful guidance (4-6 sentences). Be practical while remaining emotionally supportive."
+            return "Offer detailed, helpful guidance (4-6 sentences). Be practical while remaining emotionally supportive. Goal: Break down the problem and explore one small, manageable first step together."
         
         # Sharing stories or experiences - engaged listening response
         sharing_keywords = ["today", "yesterday", "happened", "tell you", "guess what", "story", "experience"]
         if any(keyword in query_lower for keyword in sharing_keywords):
-            return "Show engaged interest (3-4 sentences). Ask follow-up questions and validate their experience."
+            return "Show engaged interest (3-4 sentences). Ask follow-up questions and validate their experience. Goal: Deepen the conversation by asking about the emotional impact of the story ('How did that make you feel?')."
         
         # Short responses or one-word answers - gentle encouragement to open up
         if len(user_query.split()) <= 2:
-            return "Gently encourage more sharing (2-3 sentences). Show you're interested in hearing more."
+            return "Gently encourage more sharing (2-3 sentences). Use open-ended questions like 'What's on your mind?' or 'I'm here to listen if you'd like to talk more.' Goal: Create a safe space for them to open up."
         
         # Default - balanced response
-        return "Respond naturally and supportively (2-4 sentences). Match their communication style and energy level."
+        return "Respond naturally and supportively (2-4 sentences). Match their communication style. Goal: Always end with a gentle question that invites further conversation."
 
     async def process_message(
         self, 

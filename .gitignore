@@ -70,3 +70,4 @@ D:/Pap_Anoop/projects/polaris/conversationalEngine/.env
 api_gateway/src/phone/google-credentials.json
 keys/google-cloudvision-credentials.json
 keys/google-healthcare-credentials.json
+google-credential.json
