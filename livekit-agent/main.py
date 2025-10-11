@@ -715,32 +715,38 @@ class NoycoAssistant(Agent):
             logger.warning(f"Failed to initialize Google STT: {e}")
         
         # TTS Configuration with fallbacks
-        # Priority: ElevenLabs (primary) -> Cartesia (secondary) -> Google (ultimate fallback)
+        # Priority: Cartesia (primary) -> ElevenLabs (secondary) -> Google (ultimate fallback)
         self.primary_tts = None
         self.secondary_tts = None
         self.fallback_tts = None
         self.current_tts_provider = "none"
         self.tts_fallback_level = 0  # 0=primary, 1=secondary, 2=ultimate fallback
         
-        # ElevenLabs as primary
-        try:
-            if elevenlabs_key:
-                self.primary_tts = elevenlabs.TTS(api_key=elevenlabs_key)
-                self.current_tts_provider = "ElevenLabs"
-                logger.info("✅ Primary TTS: ElevenLabs initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize ElevenLabs TTS: {e}")
-        
-        # Cartesia as secondary fallback
+        # Cartesia as primary (changed from ElevenLabs due to production timeout issues)
         try:
             if cartesia_key:
-                self.secondary_tts = cartesia.TTS(api_key=cartesia_key)
-                if not self.primary_tts:
-                    self.current_tts_provider = "Cartesia"
-                    self.tts_fallback_level = 1
-                logger.info("✅ Secondary TTS: Cartesia initialized")
+                self.primary_tts = cartesia.TTS(
+                    api_key=cartesia_key,
+                    model="sonic-english",  # Fast, low-latency model
+                )
+                self.current_tts_provider = "Cartesia"
+                logger.info("✅ Primary TTS: Cartesia initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize Cartesia TTS: {e}")
+        
+        # ElevenLabs as secondary fallback (demoted from primary due to timeout issues)
+        try:
+            if elevenlabs_key:
+                self.secondary_tts = elevenlabs.TTS(
+                    api_key=elevenlabs_key,
+                    model_id="eleven_turbo_v2",  # Faster model to reduce timeouts
+                )
+                if not self.primary_tts:
+                    self.current_tts_provider = "ElevenLabs"
+                    self.tts_fallback_level = 1
+                logger.info("✅ Secondary TTS: ElevenLabs initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ElevenLabs TTS: {e}")
         
         # Google TTS as ultimate fallback
         try:
@@ -873,55 +879,85 @@ class NoycoAssistant(Agent):
             logger.error(f"❌ Error sending message to frontend: {e}", exc_info=True)
     
     async def _speak_with_fallback(self, text: str):
-        """Speak text with comprehensive TTS fallback mechanism"""
+        """
+        Speak text with comprehensive TTS fallback mechanism with runtime provider switching.
+        This method tries each TTS provider in order, switching providers on failure.
+        """
         
         # If all services failed, only send text message (already sent via data channel)
         if self._all_services_failed:
             logger.warning(f"⚠️ [{self.session_id}] All voice services unavailable - text-only mode")
             return
         
-        try:
-            # Try current TTS level
-            if self.tts_fallback_level == 0 and self.primary_tts:
-                # Try ElevenLabs (primary)
-                try:
-                    self.session.say(text)
-                    logger.info(f"✅ [{self.session_id}] Speech generated with ElevenLabs")
-                    return
-                except Exception as e:
-                    logger.warning(f"[{self.session_id}] ElevenLabs TTS failed: {e}")
-                    self.tts_fallback_level = 1  # Move to secondary
-            
-            if self.tts_fallback_level == 1 and self.secondary_tts:
-                # Try Cartesia (secondary)
-                try:
-                    self.tts = self.secondary_tts
-                    self.session.say(text)
-                    logger.info(f"✅ [{self.session_id}] Speech generated with Cartesia (secondary)")
-                    return
-                except Exception as e:
-                    logger.warning(f"[{self.session_id}] Cartesia TTS failed: {e}")
-                    self.tts_fallback_level = 2  # Move to ultimate fallback
-            
-            if self.tts_fallback_level == 2 and self.fallback_tts:
-                # Try Google TTS (ultimate fallback)
-                try:
-                    self.tts = self.fallback_tts
-                    self.session.say(text)
-                    logger.info(f"✅ [{self.session_id}] Speech generated with Google TTS (ultimate fallback)")
-                    return
-                except Exception as e:
-                    logger.error(f"[{self.session_id}] Google TTS (ultimate fallback) also failed: {e}")
-                    self._all_services_failed = True
-            
-            # If we reach here, all TTS services have failed
-            if not self._all_services_failed:
-                self._all_services_failed = True
-                logger.error(f"❌ [{self.session_id}] All TTS services failed - switching to text-only mode")
+        # Build list of TTS providers to try in order
+        tts_attempts = []
+        
+        if self.tts_fallback_level == 0:
+            if self.primary_tts:
+                tts_attempts.append(("Cartesia (primary)", self.primary_tts, 0))
+            if self.secondary_tts:
+                tts_attempts.append(("ElevenLabs (secondary)", self.secondary_tts, 1))
+            if self.fallback_tts:
+                tts_attempts.append(("Google (ultimate fallback)", self.fallback_tts, 2))
+        elif self.tts_fallback_level == 1:
+            if self.secondary_tts:
+                tts_attempts.append(("ElevenLabs (secondary)", self.secondary_tts, 1))
+            if self.fallback_tts:
+                tts_attempts.append(("Google (ultimate fallback)", self.fallback_tts, 2))
+        elif self.tts_fallback_level == 2:
+            if self.fallback_tts:
+                tts_attempts.append(("Google (ultimate fallback)", self.fallback_tts, 2))
+        
+        # Try each TTS provider in order with timeout protection
+        last_error = None
+        for provider_name, tts_instance, level in tts_attempts:
+            try:
+                logger.info(f"🎤 [{self.session_id}] Attempting TTS with {provider_name}")
                 
-        except Exception as e:
-            logger.error(f"Critical error in speak_with_fallback: {e}")
+                # Switch to this TTS provider
+                self.tts = tts_instance
+                self.tts_fallback_level = level
+                
+                # Attempt to speak with timeout protection
+                # session.say() is non-blocking, so we need to wrap it carefully
+                try:
+                    self.session.say(text)
+                    # Give it a moment to start processing
+                    await asyncio.sleep(0.1)
+                    logger.info(f"✅ [{self.session_id}] Speech queued with {provider_name}")
+                    return
+                except asyncio.TimeoutError:
+                    raise Exception(f"Timeout waiting for {provider_name}")
+                except Exception as say_error:
+                    # If session.say() itself fails, try next provider
+                    raise Exception(f"{provider_name} say() failed: {say_error}")
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"⚠️ [{self.session_id}] {provider_name} TTS failed: {e}")
+                
+                # If this was the primary, mark it as failed and move to next
+                if level == 0:
+                    logger.info(f"🔄 [{self.session_id}] Switching from Cartesia to ElevenLabs fallback")
+                elif level == 1:
+                    logger.info(f"🔄 [{self.session_id}] Switching from ElevenLabs to Google fallback")
+                
+                # Continue to next provider
+                continue
+        
+        # If we reach here, all TTS services have failed
+        if not self._all_services_failed:
             self._all_services_failed = True
+            logger.error(f"❌ [{self.session_id}] All TTS services failed (last error: {last_error})")
+            logger.error(f"❌ [{self.session_id}] Switching to text-only mode")
+            
+            # Send explicit text-only message to user
+            fallback_message = (
+                "I apologize, but our voice services are currently experiencing issues. "
+                "Our servers are overloaded at the moment. You can try our chat-based agent "
+                "or please try again after some time. Thank you for your patience."
+            )
+            await self._send_message_to_frontend(fallback_message, "system")
     
     async def _send_typing_indicator(self):
         """Send typing indicator"""
