@@ -79,6 +79,9 @@ def patch_settings(monkeypatch):
         IND_1M_INTRO_MONTHLY = "price_intro_1m"
         IND_3M_INTRO_MONTHLY = "price_intro_3m"
         IND_6M_INTRO_MONTHLY = "price_intro_6m"
+        # Simulate presence of per-period upfront IDs (should force iterations=1)
+        IND_3M_INTRO_QUARTERLY = "price_intro_3m_q"
+        IND_6M_INTRO_SEMIANNUAL = "price_intro_6m_sa"
         IND_1M_RECUR_MONTHLY = "price_recur_1m"
         IND_3M_RECUR_MONTHLY = "price_recur_3m"
         IND_6M_RECUR_MONTHLY = "price_recur_6m"
@@ -116,8 +119,9 @@ def make_event(plan: str):
     "plan, intro, recur, iterations",
     [
         ("one_month", "price_intro_1m", "price_recur_1m", 1),
-        ("three_months", "price_intro_3m", "price_recur_3m", 3),
-        ("six_months", "price_intro_6m", "price_recur_6m", 6),
+        # When quarterly/semiannual IDs are present in settings, expect 1 iteration and the per-period intro IDs
+        ("three_months", "price_intro_3m_q", "price_recur_3m", 1),
+        ("six_months", "price_intro_6m_sa", "price_recur_6m", 1),
     ],
 )
 async def test_schedule_mapping_monthly(monkeypatch, plan, intro, recur, iterations):

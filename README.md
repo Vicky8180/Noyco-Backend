@@ -324,6 +324,10 @@ Set the following environment variables for the API Gateway service (FastAPI):
 - IND_3M_RECUR_MONTHLY
 - IND_6M_RECUR_MONTHLY
 
+Optional operational flags:
+
+- USE_CUSTOM_CHECKOUT (default: false) — Enable the custom checkout flow powered by Payment Element.
+
 These IND_* variables are the Stripe Price IDs for the introductory period and the recurring monthly phases of the 1-month, 3-months, and 6-months plans. You can keep three distinct monthly recurring price IDs at the same amount (e.g., $29.99) for future flexibility.
 
 Note: Week-based env variables (IND_4W_*, IND_12W_*, IND_24W_*) have been fully removed. Use the month-based IND_1M_*, IND_3M_*, IND_6M_* variables only.
@@ -331,6 +335,17 @@ Note: Week-based env variables (IND_4W_*, IND_12W_*, IND_24W_*) have been fully 
 Frontend (Next.js) must set:
 
 - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
+Optional frontend flags:
+
+- NEXT_PUBLIC_USE_CUSTOM_CHECKOUT (default: false) — Toggle UI to use the custom checkout experience instead of Stripe Checkout.
+
+### Supported flows
+
+Custom Checkout (Payment Element)
+  - Authenticated: POST /stripe/create-subscription returns a Payment Intent client secret used by the frontend to render Payment Element and confirm payment.
+  - Public funnel: POST /public/billing/create-subscription returns a client secret for public flows.
+  - Fulfillment: invoice.payment_succeeded (billing_reason=subscription_create) → schedule creation and plan activation.
 
 Customer Portal (optional): To avoid breaking the Subscription Schedules created after Checkout, configure the Stripe Customer Portal to restrict plan switching. Allow payment method updates and cancellation, but disable price changes.
 
@@ -349,3 +364,18 @@ Steps on Windows PowerShell:
   - python -m api_gateway.scripts.migrate_plan_types_months
 
 The script is idempotent and updates the `plans` and `individuals` collections, and best-effort adjusts `stripe_audit` if present.
+
+## Rollout and monitoring
+
+To release safely, enable custom checkout first in staging and monitor logs, then gradually enable in production:
+
+- Flags:
+  - Backend: USE_CUSTOM_CHECKOUT=true (optional gating in your services)
+  - Frontend: NEXT_PUBLIC_USE_CUSTOM_CHECKOUT=true to show custom checkout UI
+
+- Monitor in logs (API Gateway):
+  - webhook_received, webhook_idempotent_skip
+  - subscription_schedule_update
+  - plan_status_transition
+
+Rollback path: set NEXT_PUBLIC_USE_CUSTOM_CHECKOUT=false to hide custom checkout UI. If needed, you can re-enable legacy endpoints temporarily on a branch that preserves them.

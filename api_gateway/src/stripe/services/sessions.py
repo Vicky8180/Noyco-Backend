@@ -11,16 +11,16 @@ settings = get_settings()
 stripe = get_stripe()
 
 INTRO_PRICE_MAP = {
-    # Individuals — intro month prices only (month-based plans)
+    # Individuals — intro prices only; prefer per-period upfront IDs when available
     (UserRole.INDIVIDUAL.value, "one_month"): settings.IND_1M_INTRO_MONTHLY,
-    (UserRole.INDIVIDUAL.value, "three_months"): settings.IND_3M_INTRO_MONTHLY,
-    (UserRole.INDIVIDUAL.value, "six_months"): settings.IND_6M_INTRO_MONTHLY,
+    (UserRole.INDIVIDUAL.value, "three_months"): settings.IND_3M_INTRO_QUARTERLY,
+    (UserRole.INDIVIDUAL.value, "six_months"): settings.IND_6M_INTRO_SEMIANNUAL,
 }
 def create_checkout_session(*, user, plan_type: str) -> dict:
     role_value = user.role.value if hasattr(user, "role") else str(user.role)
     key = (role_value, plan_type)
     if key not in INTRO_PRICE_MAP:
-        raise ValueError(f"Intro price mapping not found for {key}. Check IND_*_INTRO_MONTHLY environment variables.")
+        raise ValueError(f"Intro price mapping not found for {key}. Ensure IND_1M_INTRO_MONTHLY, IND_3M_INTRO_QUARTERLY, and IND_6M_INTRO_SEMIANNUAL are set.")
 
     price_id = INTRO_PRICE_MAP[key]
     # Generate a unique idempotency key per checkout attempt to avoid reusing an old

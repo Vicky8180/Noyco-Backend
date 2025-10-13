@@ -3,6 +3,8 @@ import logging
 from pydantic_settings import BaseSettings
 from typing import Optional
 from dotenv import load_dotenv
+import os
+import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -94,6 +96,8 @@ class APIGatewaySettings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Feature flags
     FUNNEL_PUBLIC_BILLING_ENABLED: bool = True
+    # Rollout flag for custom checkout (Payment Element). When False, legacy Stripe Checkout remains default.
+    USE_CUSTOM_CHECKOUT: bool = False
     
     # API Keys
     GEMINI_API_KEY: str

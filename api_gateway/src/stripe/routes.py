@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 # Import auth and schemas
 from ...middlewares.jwt_auth import JWTAuthController
 from .schemas import CheckoutBody, CheckoutURL, BillingCycle
-from .services.sessions import create_checkout_session
 from .webhooks.base import verify_stripe_signature
 from .services import webhooks as dispatcher
 from ..billing.schema import UserRole, PlanType, PlanStatus
 from .client import get_stripe
 from .audit import log
+from .idempotency import generate as generate_idem
+from .utils import build_subscription_metadata
 
 from ...database.db import get_database
 from .config import get_settings
@@ -67,114 +68,6 @@ def _ensure_subscription_metadata(sub, current_user):
         pass
     return sub
 
-# Checkout endpoint
-@router.post("/checkout", response_model=CheckoutURL)
-async def create_checkout(body: CheckoutBody, request: Request, current_user=Depends(jwt_auth.get_current_user)):
-    # Enforce individuals-only for current release
-    if current_user.role != UserRole.INDIVIDUAL:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only individual accounts can purchase subscriptions")
-
-    # Validate only new Leapply plan types
-    allowed_plans = {PlanType.ONE_MONTH, PlanType.THREE_MONTHS, PlanType.SIX_MONTHS}
-    if body.plan_type not in allowed_plans:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Plan type not supported. Choose one of: one_month, three_months, six_months",
-        )
-
-    # Prepare shared values for diagnostics and potential revert on failure
-    now = __import__("datetime").datetime.utcnow()
-    prev_status = None
-    prev_plan_type = None
-    try:
-        # Upsert individual's plan as PENDING before creating checkout session
-        # Try to find existing plan doc and remember previous state to revert if needed
-        plan_doc = db.plans.find_one({"individual_id": current_user.role_entity_id})
-        prev_status = plan_doc.get("status") if plan_doc else None
-        prev_plan_type = plan_doc.get("plan_type") if plan_doc else None
-        created_new = False
-        if plan_doc:
-            db.plans.update_one(
-                {"_id": plan_doc.get("_id")},
-                {"$set": {
-                    "plan_type": body.plan_type.value,
-                    "status": PlanStatus.PENDING.value,
-                    "updated_at": now,
-                }}
-            )
-        else:
-            # Minimal plan doc with defaults; controller will enrich on activation
-            created_new = True
-            db.plans.insert_one({
-                "id": __import__("uuid").uuid4().hex,
-                "individual_id": current_user.role_entity_id,
-                "plan_type": body.plan_type.value,
-                "status": PlanStatus.PENDING.value,
-                "selected_services": [],
-                "memory_stack": [],
-                "created_at": now,
-                "updated_at": now,
-            })
-
-        # Create checkout session
-        session = create_checkout_session(user=current_user, plan_type=body.plan_type.value)
-        url = session["url"]
-        session_id = session.get("id")
-
-        # Persist last checkout session id for diagnostics
-        try:
-            # Best-effort: store last intent and session id to correlate
-            update = {"last_checkout_intent_at": now}
-            if session_id:
-                update["last_checkout_session_id"] = session_id
-            db.plans.update_one({"individual_id": current_user.role_entity_id}, {"$set": update})
-        except Exception:
-            pass
-
-        return {"checkout_url": url}
-    except ValueError:
-        # Sessions service isn't yet wired for new plan types (handled in Task 5)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Checkout for this plan isn't configured yet. Please try again later.",
-        )
-    except Exception as e:
-        # Broader failure (network/Stripe/transient). Revert/annotate pending state to avoid lingering PENDING.
-        try:
-            revert_status = prev_status if prev_status else PlanStatus.INACTIVE.value
-            db.plans.update_one(
-                {"individual_id": current_user.role_entity_id},
-                {
-                    "$set": {
-                        "status": revert_status,
-                        "plan_type": prev_plan_type if prev_plan_type else body.plan_type.value,
-                        "last_checkout_error": str(e)[:500],
-                        "last_checkout_error_at": now,
-                        "updated_at": now,
-                    },
-                    "$inc": {"last_checkout_failed_attempts": 1},
-                },
-            )
-        except Exception:
-            pass
-        # Audit the failure event (no sensitive data)
-        try:
-            log(
-                "checkout_create_failed",
-                {
-                    "role": current_user.role.value,
-                    "role_entity_id": current_user.role_entity_id,
-                    "plan_type": body.plan_type.value,
-                },
-                "error",
-                str(e),
-            )
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Unable to start checkout at the moment. Please try again in a minute.",
-        )
 
 @router.post('/webhook', include_in_schema=False)
 async def stripe_webhook(request: Request):
@@ -477,3 +370,181 @@ async def list_subscriptions(_: UserRole = Depends(admin_only)):
 
 # register admin_router
 router.include_router(admin_router) 
+
+# ---------------------------------------------------------------------------
+# Custom Checkout (Payment Element) - Authenticated subscription creation
+# ---------------------------------------------------------------------------
+
+class CreateSubscriptionBody(BaseModel):
+    plan_type: PlanType
+
+
+class CreateSubscriptionResponse(BaseModel):
+    client_secret: str
+    subscription_id: str
+    customer_id: str
+
+
+@router.post("/create-subscription", response_model=CreateSubscriptionResponse)
+async def create_subscription(body: CreateSubscriptionBody, current_user=Depends(jwt_auth.get_current_user)):
+    """Create a Stripe Subscription in default_incomplete state and return a client secret.
+
+    This powers the custom checkout (Payment Element) flow for authenticated users.
+    """
+    # Only individuals supported in current release
+    if current_user.role != UserRole.INDIVIDUAL:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only individual accounts can purchase subscriptions")
+
+    allowed_plans = {PlanType.ONE_MONTH, PlanType.THREE_MONTHS, PlanType.SIX_MONTHS}
+    if body.plan_type not in allowed_plans:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Plan type not supported. Choose one of: one_month, three_months, six_months",
+        )
+
+    now = __import__("datetime").datetime.utcnow()
+    prev_status = None
+    prev_plan_type = None
+
+    # Map plan to intro price id (single source: StripeSettings)
+    intro_price_map = {
+        (UserRole.INDIVIDUAL.value, "one_month"): settings.IND_1M_INTRO_MONTHLY,
+        (UserRole.INDIVIDUAL.value, "three_months"): settings.IND_3M_INTRO_QUARTERLY,
+        (UserRole.INDIVIDUAL.value, "six_months"): settings.IND_6M_INTRO_SEMIANNUAL,
+    }
+    key = (current_user.role.value, body.plan_type.value)
+    price_id = intro_price_map.get(key)
+    if not price_id:
+        raise HTTPException(status_code=400, detail="Intro price mapping not found for selected plan")
+
+    try:
+        # Upsert individual's plan as PENDING before creating subscription
+        plan_doc = db.plans.find_one({"individual_id": current_user.role_entity_id})
+        prev_status = plan_doc.get("status") if plan_doc else None
+        prev_plan_type = plan_doc.get("plan_type") if plan_doc else None
+        if plan_doc:
+            db.plans.update_one(
+                {"_id": plan_doc.get("_id")},
+                {"$set": {
+                    "plan_type": body.plan_type.value,
+                    "status": PlanStatus.PENDING.value,
+                    "updated_at": now,
+                }}
+            )
+        else:
+            db.plans.insert_one({
+                "id": __import__("uuid").uuid4().hex,
+                "individual_id": current_user.role_entity_id,
+                "plan_type": body.plan_type.value,
+                "status": PlanStatus.PENDING.value,
+                "selected_services": [],
+                "memory_stack": [],
+                "created_at": now,
+                "updated_at": now,
+            })
+
+        # Ensure a Stripe Customer exists (reuse if present)
+        customer_id = None
+        plan_doc = db.plans.find_one({"individual_id": current_user.role_entity_id}) or {}
+        if plan_doc:
+            customer_id = plan_doc.get("stripe_customer_id")
+        if not customer_id:
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                metadata={
+                    "role": current_user.role.value,
+                    "role_entity_id": current_user.role_entity_id,
+                },
+            )
+            customer_id = customer.get("id")
+            try:
+                db.plans.update_one(
+                    {"individual_id": current_user.role_entity_id},
+                    {"$set": {"stripe_customer_id": customer_id, "updated_at": now}},
+                )
+            except Exception:
+                pass
+
+        # Idempotency for subscription creation
+        import time, uuid as _uuid
+        idem = generate_idem("sub_create", getattr(current_user, "user_id", "unknown"), body.plan_type.value, str(int(time.time())), _uuid.uuid4().hex)
+
+        # Create subscription in default_incomplete state and expand PaymentIntent to get client_secret
+        subscription = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{"price": price_id, "quantity": 1}],
+            payment_behavior="default_incomplete",
+            expand=["latest_invoice.payment_intent"],
+            metadata=build_subscription_metadata(
+                role=current_user.role.value,
+                role_entity_id=current_user.role_entity_id,
+                plan_type=body.plan_type.value,
+                source=None,
+            ),
+            automatic_tax={"enabled": True},
+            idempotency_key=idem,
+        )
+
+        latest_invoice = subscription.get("latest_invoice") or {}
+        payment_intent = latest_invoice.get("payment_intent") or {}
+        client_secret = payment_intent.get("client_secret")
+        if not client_secret:
+            raise HTTPException(status_code=502, detail="Missing client secret; unable to proceed with payment")
+
+        # Diagnostics
+        try:
+            db.plans.update_one(
+                {"individual_id": current_user.role_entity_id},
+                {"$set": {
+                    "last_subscription_attempt_at": now,
+                    "last_subscription_id": subscription.get("id"),
+                    "stripe_customer_id": customer_id,
+                }}
+            )
+        except Exception:
+            pass
+
+        try:
+            log("subscription_create", {
+                "role": current_user.role.value,
+                "role_entity_id": current_user.role_entity_id,
+                "plan_type": body.plan_type.value,
+                "customer_id": customer_id,
+                "subscription_id": subscription.get("id"),
+            }, "ok")
+        except Exception:
+            pass
+
+        return CreateSubscriptionResponse(
+            client_secret=client_secret,
+            subscription_id=subscription.get("id"),
+            customer_id=customer_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Revert plan state best-effort
+        try:
+            revert_status = prev_status if prev_status else PlanStatus.INACTIVE.value
+            db.plans.update_one(
+                {"individual_id": current_user.role_entity_id},
+                {"$set": {
+                    "status": revert_status,
+                    "plan_type": prev_plan_type if prev_plan_type else body.plan_type.value,
+                    "last_subscription_error": str(e)[:500],
+                    "last_subscription_error_at": now,
+                    "updated_at": now,
+                }, "$inc": {"last_subscription_failed_attempts": 1}},
+            )
+        except Exception:
+            pass
+
+        try:
+            log("subscription_create_failed", {
+                "role": current_user.role.value,
+                "role_entity_id": current_user.role_entity_id,
+                "plan_type": body.plan_type.value,
+            }, "error", str(e))
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail="Unable to start subscription at the moment. Please try again in a minute.")

@@ -8,6 +8,7 @@ import logging
 from ..stripe.config import get_settings as get_stripe_settings
 from ..stripe.client import get_stripe
 from ..stripe.idempotency import generate as generate_idem
+from ..stripe.utils import build_subscription_metadata
 from ...database.db import get_database
 from ..billing.schema import UserRole
 from ...config import get_settings as get_app_settings
@@ -40,12 +41,7 @@ class PlanCatalogResponse(BaseModel):
 
 
 class CheckoutSessionRequest(BaseModel):
-    email: EmailStr
-    plan_code: Literal["IND_1M", "IND_3M", "IND_6M"] = Field(..., description="One of IND_1M | IND_3M | IND_6M")
-
-
-class CheckoutSessionResponse(BaseModel):
-    sessionId: str
+    pass  # deprecated
 
 
 class SessionStatusResponse(BaseModel):
@@ -89,8 +85,8 @@ def _fetch_catalog_from_stripe():
 
     mapping = [
         ("IND_1M", "1 Month", 1, settings.IND_1M_INTRO_MONTHLY, settings.IND_1M_RECUR_MONTHLY),
-        ("IND_3M", "3 Months", 3, settings.IND_3M_INTRO_MONTHLY, settings.IND_3M_RECUR_MONTHLY),
-        ("IND_6M", "6 Months", 6, settings.IND_6M_INTRO_MONTHLY, settings.IND_6M_RECUR_MONTHLY),
+        ("IND_3M", "3 Months", 3, settings.IND_3M_INTRO_QUARTERLY, settings.IND_3M_RECUR_MONTHLY),
+        ("IND_6M", "6 Months", 6, settings.IND_6M_INTRO_SEMIANNUAL, settings.IND_6M_RECUR_MONTHLY),
     ]
 
     plans: List[PlanCatalogItem] = []
@@ -106,7 +102,7 @@ def _fetch_catalog_from_stripe():
                     if months == 1:
                         intro_text = f"{intro_amount} first month"
                     else:
-                        intro_text = f"{intro_amount} first {months} months"
+                        intro_text = f"{intro_amount} total for first {months} months"
             # Build recurring display using recurring price id
             if recur_price_id:
                 r_obj = stripe.Price.retrieve(recur_price_id)
@@ -150,68 +146,9 @@ async def get_public_plans():
     return catalog
 
 
-@router.post("/billing/checkout-session", response_model=CheckoutSessionResponse)
+@router.post("/billing/checkout-session")
 async def create_public_checkout_session(body: CheckoutSessionRequest):
-    """Create a Stripe Checkout Session for funnel users (no auth).
-
-    No DB writes; fulfillment occurs in Stripe webhooks.
-    """
-    app_settings = get_app_settings()
-    if not getattr(app_settings, "FUNNEL_PUBLIC_BILLING_ENABLED", True):
-        raise HTTPException(status_code=404, detail="Not found")
-    settings = get_stripe_settings()
-    stripe = get_stripe()
-
-    code_to_price_and_plan = {
-        "IND_1M": (settings.IND_1M_INTRO_MONTHLY, "one_month"),
-        "IND_3M": (settings.IND_3M_INTRO_MONTHLY, "three_months"),
-        "IND_6M": (settings.IND_6M_INTRO_MONTHLY, "six_months"),
-    }
-    price_id, plan_type = code_to_price_and_plan.get(body.plan_code, (None, None))
-    if not price_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported or unconfigured plan_code")
-
-    # Idempotency: scope by email+plan+timestamp
-    import uuid
-    idem = generate_idem("public_checkout", body.email, body.plan_code, str(int(time())), uuid.uuid4().hex)
-
-    try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{settings.SUCCESS_URL}?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{settings.CANCEL_URL}",
-            customer_email=body.email,
-            client_reference_id=f"public:individual:{body.plan_code}",
-            metadata={
-                "source": "funnel",
-                "role": "individual",
-                "plan_type": plan_type,
-                "billing_cycle": "monthly",
-                # role_entity_id intentionally omitted in public flow; will be created during webhook
-            },
-            payment_method_options={"card": {"request_three_d_secure": "any"}},
-            automatic_tax={"enabled": True},
-            idempotency_key=idem,
-        )
-    except Exception as e:
-        logger.exception("checkout_session_create_failed", extra={"email": body.email, "plan_code": body.plan_code})
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Unable to start checkout: {str(e)}")
-
-
-    sid = session.get("id")
-    # Seed a light marker to help correlate later (non-authoritative; webhook will fill details)
-    try:
-        db = get_database()
-        db.webhook_checkouts.update_one(
-            {"session_id": sid},
-            {"$setOnInsert": {"session_id": sid, "processed": False, "email": body.email, "inserted_at": __import__("datetime").datetime.utcnow()}},
-            upsert=True,
-        )
-    except Exception:
-        pass
-    logger.info("checkout_session_created", extra={"session_id": sid, "email": body.email, "plan_code": body.plan_code})
-    return CheckoutSessionResponse(sessionId=sid)
+    raise HTTPException(status_code=410, detail="Legacy Checkout is no longer supported. Use /public/billing/create-subscription.")
 
 
 @router.get("/stripe/session-status", response_model=SessionStatusResponse)
@@ -283,6 +220,177 @@ async def get_public_session_status(session_id: str = Query(..., alias="session_
 
     logger.info("session_status", extra={"session_id": session_id, "processed": processed, "email": email, "user_status": user_status, "plan_assigned": bool(plan_assigned)})
     return SessionStatusResponse(processed=processed, email=email, userStatus=user_status, planAssigned=plan_assigned)
+
+
+# -----------------------------------------------------------------------------
+# Custom Checkout (Payment Element) - Public create-subscription
+# -----------------------------------------------------------------------------
+
+class PublicCreateSubscriptionRequest(BaseModel):
+    email: EmailStr
+    plan_code: Literal["IND_1M", "IND_3M", "IND_6M"]
+
+
+class PublicCreateSubscriptionResponse(BaseModel):
+    client_secret: str
+    subscription_id: str
+    customer_id: str
+
+
+@router.post("/billing/create-subscription", response_model=PublicCreateSubscriptionResponse)
+async def public_create_subscription(body: PublicCreateSubscriptionRequest):
+    """Create a Subscription for public funnel (no auth) and return a client secret."""
+    app_settings = get_app_settings()
+    if not getattr(app_settings, "FUNNEL_PUBLIC_BILLING_ENABLED", True):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    settings = get_stripe_settings()
+    stripe = get_stripe()
+
+    code_to_price_and_plan = {
+        "IND_1M": (settings.IND_1M_INTRO_MONTHLY, "one_month"),
+        # For 3M and 6M, use per-period intro prices to bill upfront once
+        "IND_3M": (settings.IND_3M_INTRO_QUARTERLY, "three_months"),
+        "IND_6M": (settings.IND_6M_INTRO_SEMIANNUAL, "six_months"),
+    }
+    price_id, plan_type = code_to_price_and_plan.get(body.plan_code, (None, None))
+    if not price_id or not plan_type:
+        raise HTTPException(status_code=400, detail="Unsupported or unconfigured plan_code")
+
+    # Ensure/retrieve customer by email
+    customer_id = None
+    try:
+        # Search by email (Stripe API: list is limited; for test env this is acceptable)
+        existing = stripe.Customer.list(email=body.email, limit=1)
+        if existing and existing.get("data"):
+            customer_id = existing["data"][0]["id"]
+    except Exception:
+        customer_id = None
+    if not customer_id:
+        cust = stripe.Customer.create(email=body.email, metadata={"role": UserRole.INDIVIDUAL.value})
+        customer_id = cust.get("id")
+
+    # Idempotency: scope by email+plan+ts
+    import uuid
+    idem = generate_idem("public_sub_create", body.email, body.plan_code, str(int(time())), uuid.uuid4().hex)
+
+    try:
+        subscription = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{"price": price_id, "quantity": 1}],
+            payment_behavior="default_incomplete",
+            expand=["latest_invoice.payment_intent"],
+            metadata=build_subscription_metadata(
+                role=UserRole.INDIVIDUAL.value,
+                role_entity_id=None,
+                plan_type=plan_type,
+                source="funnel",
+            ),
+            automatic_tax={"enabled": True},
+            idempotency_key=idem,
+        )
+    except Exception as e:
+        logger.exception("public_sub_create_failed", extra={"email": body.email, "plan_code": body.plan_code})
+        raise HTTPException(status_code=502, detail=f"Unable to start subscription: {str(e)}")
+
+    latest_invoice = subscription.get("latest_invoice") or {}
+    payment_intent = latest_invoice.get("payment_intent") or {}
+    client_secret = payment_intent.get("client_secret")
+    if not client_secret:
+        raise HTTPException(status_code=502, detail="Missing client secret; unable to proceed with payment")
+
+    # Optionally seed a status marker keyed by subscription id for visibility
+    try:
+        db = get_database()
+        db.webhook_checkouts.update_one(
+            {"subscription_id": subscription.get("id")},
+            {"$setOnInsert": {
+                "subscription_id": subscription.get("id"),
+                "processed": False,
+                "email": body.email,
+                "inserted_at": __import__("datetime").datetime.utcnow(),
+                "source": "funnel",
+            }},
+            upsert=True,
+        )
+    except Exception:
+        pass
+
+    logger.info("public_subscription_created", extra={"subscription_id": subscription.get("id"), "email": body.email, "plan_code": body.plan_code})
+    return PublicCreateSubscriptionResponse(
+        client_secret=client_secret,
+        subscription_id=subscription.get("id"),
+        customer_id=customer_id,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Payment status endpoint for Payment Element flow
+# -----------------------------------------------------------------------------
+
+@router.get("/stripe/payment-status", response_model=SessionStatusResponse)
+async def get_payment_status(subscription_id: Optional[str] = Query(None), payment_intent: Optional[str] = Query(None)):
+    """Return payment processing status for Payment Element-based subscriptions.
+
+    processed = True when the Payment Intent succeeded or when the subscription is active/paid.
+    """
+    app_settings = get_app_settings()
+    if not getattr(app_settings, "FUNNEL_PUBLIC_BILLING_ENABLED", True):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    stripe = get_stripe()
+    db = get_database()
+    processed = False
+    email = None
+    user_status = None
+    plan_assigned = None
+
+    if payment_intent:
+        try:
+            pi = stripe.PaymentIntent.retrieve(payment_intent)
+            processed = (pi.get("status") == "succeeded")
+            if not email:
+                email = (pi.get("charges", {}).get("data", [{}])[0].get("billing_details", {}).get("email") if pi.get("charges") else None)
+        except Exception:
+            pass
+
+    if not processed and subscription_id:
+        try:
+            sub = stripe.Subscription.retrieve(subscription_id, expand=[
+                "latest_invoice",
+                "latest_invoice.customer",
+                "latest_invoice.payment_intent",
+            ])
+            status_str = sub.get("status")
+            latest_inv = sub.get("latest_invoice", {}) or {}
+            pi_obj = latest_inv.get("payment_intent") or {}
+            pi_status = pi_obj.get("status") if isinstance(pi_obj, dict) else None
+            # Consider succeeded PI or paid invoice or active/trialing subscription as processed
+            processed = (
+                (pi_status == "succeeded")
+                or (latest_inv.get("paid") is True)
+                or (status_str in ("active", "trialing"))
+            )
+            if not email:
+                cust = latest_inv.get("customer")
+                if isinstance(cust, dict):
+                    email = cust.get("email")
+        except Exception:
+            pass
+
+    # If processed, derive user status/plan assigned similar to session-status
+    if processed and email:
+        user = db.users.find_one({"email": email}) or {}
+        role_entity_id = user.get("role_entity_id")
+        email_verified = bool(user.get("email_verified", False))
+        user_status = "active" if email_verified else "pending_verification"
+        if user.get("role") == UserRole.INDIVIDUAL.value and role_entity_id:
+            plan_doc = db.plans.find_one({"individual_id": role_entity_id}) or {}
+            plan_assigned = bool(plan_doc.get("status") in ("active", "pending", "past_due"))
+
+    logger.info("payment_status", extra={"subscription_id": subscription_id, "payment_intent": payment_intent, "processed": processed, "email": email, "user_status": user_status, "plan_assigned": bool(plan_assigned)})
+    return SessionStatusResponse(processed=processed, email=email, userStatus=user_status, planAssigned=plan_assigned)
+
 
 
 @router.post("/otp/resend", status_code=status.HTTP_202_ACCEPTED)
