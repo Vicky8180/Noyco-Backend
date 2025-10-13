@@ -426,7 +426,7 @@ async def create_voice_session(request: VoiceSessionRequest):
 async def process_voice_message(request: VoiceMessageRequest):
     """
     Process voice message with intent detection and orchestration
-    This endpoint is called by the LiveKit AI agent (main_prod.py)
+    This endpoint is called by the LiveKit AI agent (main.py)
     """
     try:
         logger.info(f"=== Processing voice message for session: {request.session_id} ===")

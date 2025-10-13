@@ -134,6 +134,14 @@ class NoycoAssistant(Agent):
         self.stt_fallback_active = False  # True if fallback STT is being used
         self.tts_fallback_active = False  # True if fallback TTS is being used
         
+        # Manual send mode feature
+        self.auto_send_enabled = True  # True = auto-send (default), False = manual send
+        self.transcript_buffer = []  # Buffer to accumulate transcripts in manual mode
+        self.buffer_lock = asyncio.Lock()  # Lock for thread-safe buffer access
+        
+        # Track Google TTS instance creation for debugging
+        self.google_tts_creation_count = 0
+        
         # Get API keys from settings
         cartesia_key = settings.CARTESIA_API_KEY
         google_key = settings.GOOGLE_API_KEY
@@ -219,19 +227,20 @@ class NoycoAssistant(Agent):
             logger.warning(f"Failed to initialize Cartesia TTS: {e}")
         
         # Google TTS as fallback
+        # Store credentials for creating fresh instances
+        self.google_tts_credentials = google_creds
+        self.google_tts_key = google_key
+        
         try:
             if google_key or google_creds:
-                self.fallback_tts = google.TTS(
-                    credentials_info=google_creds if google_creds else None,
-                    language="en-US",
-                    voice_name="en-US-Chirp-HD-F"
-                )
+                self.fallback_tts = self._create_google_tts_instance()
                 if not self.primary_tts:
                     self.current_tts_provider = "Google"
                     self.tts_fallback_level = 1
                 logger.info("✅ Fallback TTS: Google initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize Google TTS: {e}")
+            self.fallback_tts = None
         
         # Check if we have at least one working service
         if not (self.primary_stt or self.fallback_stt):
@@ -270,6 +279,60 @@ class NoycoAssistant(Agent):
         if self._all_services_failed:
             logger.error("⚠️ CRITICAL: Voice services unavailable - text-only mode")
     
+    def _create_google_tts_instance(self):
+        """Create a fresh Google TTS instance to avoid decoder issues"""
+        try:
+            self.google_tts_creation_count += 1
+            logger.info(f"🏗️ [{self.session_id}] Creating Google TTS instance #{self.google_tts_creation_count}")
+            
+            instance = google.TTS(
+                credentials_info=self.google_tts_credentials if self.google_tts_credentials else None,
+                language="en-US",
+                voice_name="en-US-Chirp-HD-F",
+                # Add sample rate specification for better compatibility
+                sample_rate=24000,
+            )
+            
+            logger.info(f"✅ [{self.session_id}] Google TTS instance created successfully (ID: {id(instance)})")
+            return instance
+        except Exception as e:
+            logger.error(f"❌ Failed to create Google TTS instance: {e}", exc_info=True)
+            return None
+    
+    def _refresh_google_tts(self):
+        """Refresh the Google TTS instance to prevent decoder issues"""
+        if self.google_tts_credentials or self.google_tts_key:
+            try:
+                logger.info(f"🔄 [{self.session_id}] Creating fresh Google TTS instance...")
+                new_instance = self._create_google_tts_instance()
+                if new_instance:
+                    old_instance_id = id(self.fallback_tts) if self.fallback_tts else None
+                    self.fallback_tts = new_instance
+                    new_instance_id = id(self.fallback_tts)
+                    
+                    logger.info(f"✅ [{self.session_id}] Google TTS instance refreshed (old: {old_instance_id}, new: {new_instance_id})")
+                    
+                    # Update the session's internal TTS reference
+                    if hasattr(self, 'session') and self.session:
+                        try:
+                            # Try to update the AgentSession's TTS instance
+                            if hasattr(self.session, '_tts'):
+                                self.session._tts = new_instance
+                                logger.debug(f"[{self.session_id}] Updated session._tts reference")
+                            # Also update the agent's TTS if accessible
+                            if hasattr(self.session, '_agent') and hasattr(self.session._agent, '_tts'):
+                                self.session._agent._tts = new_instance
+                                logger.debug(f"[{self.session_id}] Updated session._agent._tts reference")
+                        except Exception as update_error:
+                            logger.warning(f"Could not update session TTS reference: {update_error}")
+                    
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Failed to refresh Google TTS: {e}", exc_info=True)
+        else:
+            logger.warning(f"[{self.session_id}] Cannot refresh Google TTS - no credentials available")
+        return False
+
     @property
     def stt(self):
         if self.stt_fallback_active:
@@ -392,6 +455,95 @@ class NoycoAssistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error sending message to frontend: {e}", exc_info=True)
     
+    async def _send_transcript_update(self, transcript: str):
+        """Send accumulated transcript to frontend for display in manual mode"""
+        try:
+            if self._is_shutting_down or not self._room_instance:
+                return
+            
+            update_data = {
+                "type": "transcript_update",
+                "text": transcript,
+                "timestamp": asyncio.get_event_loop().time()
+            }
+            
+            data_packet = json.dumps(update_data).encode('utf-8')
+            await self._room_instance.local_participant.publish_data(
+                data_packet,
+                reliable=True
+            )
+            
+            logger.debug(f"📝 [{self.session_id}] Transcript update sent: {transcript[:50]}...")
+        except Exception as e:
+            logger.error(f"❌ Error sending transcript update: {e}", exc_info=True)
+    
+    async def _process_manual_send(self):
+        """Process the buffered transcript when manual send is triggered"""
+        try:
+            async with self.buffer_lock:
+                if not self.transcript_buffer:
+                    logger.warning(f"[{self.session_id}] Manual send triggered but buffer is empty")
+                    return
+                
+                # Combine all buffered transcripts
+                user_text = " ".join(self.transcript_buffer).strip()
+                self.transcript_buffer.clear()
+            
+            if not user_text:
+                logger.warning(f"[{self.session_id}] Manual send: empty transcript after joining")
+                return
+            
+            logger.info(f"📤 [{self.session_id}] Processing manual send: '{user_text[:100]}...'")
+            
+            # Send user's message to frontend
+            await self._send_message_to_frontend(user_text, "user")
+            
+            # Process the message (get response and speak)
+            await self._process_user_message(user_text)
+            
+        except Exception as e:
+            logger.error(f"❌ [{self.session_id}] Error processing manual send: {e}", exc_info=True)
+    
+    async def _process_user_message(self, user_text: str):
+        """Common logic to process a user message and generate response"""
+        response_text = None
+        
+        try:
+            # Start typing indicator
+            typing_task = asyncio.create_task(self._send_typing_indicator())
+            
+            try:
+                response_text = await self._get_backend_response(user_text)
+            finally:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+                
+                try:
+                    if hasattr(self.session, 'emit_metadata'):
+                        await self.session.emit_metadata({"typing": False})
+                except:
+                    pass
+            
+            if not response_text or not response_text.strip():
+                logger.warning(f"[{self.session_id}] Empty response from backend")
+                response_text = "I'm processing that. Could you tell me more?"
+        
+        except Exception as e:
+            logger.error(f"[{self.session_id}] Error getting backend response: {e}", exc_info=True)
+            response_text = "I'm having trouble right now. Could you try again?"
+        
+        if response_text and response_text.strip():
+            logger.info(f"⬅️ [{self.session_id}] Backend response: {response_text[:100]}...")
+            
+            # Send to frontend
+            await self._send_message_to_frontend(response_text, "agent")
+            
+            # Speak the response
+            await self._speak_with_fallback(response_text)
+    
     async def _speak_with_fallback(self, text: str):
         """
         Speak text with TTS fallback. Tries all providers in order.
@@ -421,6 +573,12 @@ class NoycoAssistant(Agent):
             try:
                 logger.info(f"🎤 [{self.session_id}] Trying {provider_name} TTS")
                 
+                # Refresh Google TTS instance before use to prevent decoder issues
+                if provider_name == "Google":
+                    if not self._refresh_google_tts():
+                        logger.error(f"⚠️ [{self.session_id}] Failed to refresh Google TTS instance")
+                        continue
+                
                 # Only do health check for Cartesia (primary) to avoid decoder issues with Google
                 if provider_name == "Cartesia":
                     # Pre-validate: Try synthesizing a small test phrase to check if TTS is working
@@ -438,14 +596,80 @@ class NoycoAssistant(Agent):
                             self._switch_tts_provider()
                         raise health_error
                 else:
-                    # For Google TTS, skip health check to avoid decoder issues
-                    logger.debug(f"✅ [{self.session_id}] {provider_name} TTS - skipping health check (trusted fallback)")
+                    # For Google TTS, skip health check
+                    logger.debug(f"✅ [{self.session_id}] {provider_name} TTS - refreshed instance ready")
                 
                 # Update the fallback level to track which provider is being used
                 self.tts_fallback_level = level
                 
-                # Now queue the actual message (this is non-blocking)
-                # The self.tts property will automatically return the correct TTS based on tts_fallback_active
+                # For Google TTS, use a more aggressive approach
+                # Instead of relying on session.say(), manually synthesize
+                if provider_name == "Google":
+                    try:
+                        logger.info(f"🎵 [{self.session_id}] Using manual synthesis for Google TTS to avoid caching")
+                        
+                        # Get the current TTS instance
+                        tts_to_use = self.fallback_tts
+                        
+                        # Manually trigger synthesis and speech
+                        # This bypasses any session-level caching
+                        from livekit.agents import tts as tts_module
+                        
+                        # Create a synthesis stream
+                        synthesis_handle = tts_to_use.synthesize(text)
+                        
+                        # Use the session's play_audio method if available
+                        if hasattr(self.session, 'play_audio'):
+                            await self.session.play_audio(synthesis_handle)
+                            logger.info(f"✅ [{self.session_id}] Manual synthesis completed with {provider_name}")
+                            return
+                        else:
+                            # Fallback: use session.say() but force TTS update first
+                            logger.debug(f"[{self.session_id}] play_audio not available, using session.say() with forced update")
+                            # Force update all possible references
+                            if hasattr(self.session, '_tts'):
+                                self.session._tts = tts_to_use
+                            if hasattr(self.session, '_agent') and hasattr(self.session._agent, '_tts'):
+                                self.session._agent._tts = tts_to_use
+                            
+                            self.session.say(text)
+                            logger.info(f"✅ [{self.session_id}] TTS queued with {provider_name} (fallback)")
+                            return
+                            
+                    except Exception as manual_error:
+                        logger.error(f"❌ [{self.session_id}] Manual synthesis failed: {manual_error}", exc_info=True)
+                        # Continue to the normal flow as last resort
+                        logger.info(f"[{self.session_id}] Trying standard session.say() as last resort")
+                
+                # For non-Google TTS or as fallback, use standard approach
+                # Update the Agent's session TTS instance before using it
+                if hasattr(self, 'session') and self.session:
+                    # Try multiple ways to update the TTS reference
+                    updated = False
+                    
+                    # Method 1: Update session's _tts
+                    if hasattr(self.session, '_tts'):
+                        if provider_name == "Google":
+                            self.session._tts = self.fallback_tts
+                        elif provider_name == "Cartesia":
+                            self.session._tts = self.primary_tts
+                        updated = True
+                        logger.debug(f"[{self.session_id}] Updated session._tts")
+                    
+                    # Method 2: Update session's _agent._tts if exists
+                    if hasattr(self.session, '_agent'):
+                        if hasattr(self.session._agent, '_tts'):
+                            if provider_name == "Google":
+                                self.session._agent._tts = self.fallback_tts
+                            elif provider_name == "Cartesia":
+                                self.session._agent._tts = self.primary_tts
+                            updated = True
+                            logger.debug(f"[{self.session_id}] Updated session._agent._tts")
+                    
+                    if updated:
+                        logger.debug(f"✅ [{self.session_id}] TTS reference updated successfully")
+                
+                # Queue the message using self.session.say()
                 self.session.say(text)
                 logger.info(f"✅ [{self.session_id}] TTS queued with {provider_name}")
                 return  # Success, exit
@@ -484,6 +708,7 @@ class NoycoAssistant(Agent):
         """
         Called when the user finishes speaking.
         Intercepts user input and sends it to backend.
+        In manual mode, buffers the transcript instead of processing immediately.
         """
         if self._is_shutting_down:
             logger.info(f"⚠️ [{self.session_id}] Ignoring user turn - assistant is shutting down")
@@ -511,46 +736,22 @@ class NoycoAssistant(Agent):
         # Update activity
         await session_manager.update_activity(self.session_id)
         
-        # Send user's message to frontend
+        # Check if manual send mode is enabled
+        if not self.auto_send_enabled:
+            # Buffer the transcript instead of processing
+            async with self.buffer_lock:
+                self.transcript_buffer.append(user_text)
+                logger.info(f"📝 [{self.session_id}] Buffered transcript (manual mode): '{user_text[:50]}...'")
+            
+            # Send the transcript to frontend for display
+            await self._send_transcript_update(" ".join(self.transcript_buffer))
+            
+            # Don't process - wait for manual send
+            raise StopResponse()
+        
+        # Auto-send mode: process immediately
         await self._send_message_to_frontend(user_text, "user")
-        
-        response_text = None
-        
-        try:
-            # Start typing indicator
-            typing_task = asyncio.create_task(self._send_typing_indicator())
-            
-            try:
-                response_text = await self._get_backend_response(user_text)
-            finally:
-                typing_task.cancel()
-                try:
-                    await typing_task
-                except asyncio.CancelledError:
-                    pass
-                
-                try:
-                    if hasattr(self.session, 'emit_metadata'):
-                        await self.session.emit_metadata({"typing": False})
-                except:
-                    pass
-            
-            if not response_text or not response_text.strip():
-                logger.warning(f"[{self.session_id}] Empty response from backend")
-                response_text = "I'm processing that. Could you tell me more?"
-        
-        except Exception as e:
-            logger.error(f"[{self.session_id}] Error getting backend response: {e}", exc_info=True)
-            response_text = "I'm having trouble right now. Could you try again?"
-        
-        if response_text and response_text.strip():
-            logger.info(f"⬅️ [{self.session_id}] Backend response: {response_text[:100]}...")
-            
-            # Send to frontend
-            await self._send_message_to_frontend(response_text, "agent")
-            
-            # Speak the response
-            await self._speak_with_fallback(response_text)
+        await self._process_user_message(user_text)
         
         raise StopResponse()
     
@@ -816,6 +1017,58 @@ async def handle_session(ctx: JobContext):
         
         logger.info(f"🎯 [{session_id}] Listening for user speech...")
         
+        # Set up data channel listener for control messages
+        @ctx.room.on("data_received")
+        def on_data_received(data: rtc.DataPacket):
+            """Handle data channel messages from frontend"""
+            try:
+                payload = data.data.decode('utf-8')
+                message = json.loads(payload)
+                message_type = message.get('type')
+                
+                logger.info(f"📨 [{session_id}] Received data: {message_type}")
+                
+                if message_type == 'toggle_auto_send':
+                    # Toggle auto-send mode
+                    new_state = message.get('enabled', True)
+                    assistant.auto_send_enabled = new_state
+                    logger.info(f"🔄 [{session_id}] Auto-send mode: {new_state}")
+                    
+                    # Clear buffer if switching to auto mode
+                    if new_state:
+                        asyncio.create_task(_clear_buffer())
+                
+                elif message_type == 'manual_send':
+                    # Process buffered transcript
+                    logger.info(f"📤 [{session_id}] Manual send triggered")
+                    asyncio.create_task(assistant._process_manual_send())
+                
+                elif message_type == 'user_message':
+                    # Direct message from frontend (alternative path)
+                    text = message.get('text', '').strip()
+                    if text:
+                        logger.info(f"💬 [{session_id}] Direct message from frontend: '{text[:50]}...'")
+                        asyncio.create_task(_handle_direct_message(text))
+                
+            except json.JSONDecodeError:
+                logger.warning(f"[{session_id}] Invalid JSON in data packet")
+            except Exception as e:
+                logger.error(f"[{session_id}] Error processing data: {e}", exc_info=True)
+        
+        async def _clear_buffer():
+            """Clear the transcript buffer"""
+            async with assistant.buffer_lock:
+                assistant.transcript_buffer.clear()
+                logger.info(f"🗑️ [{session_id}] Transcript buffer cleared")
+        
+        async def _handle_direct_message(text: str):
+            """Handle direct message from frontend"""
+            try:
+                await assistant._send_message_to_frontend(text, "user")
+                await assistant._process_user_message(text)
+            except Exception as e:
+                logger.error(f"[{session_id}] Error handling direct message: {e}", exc_info=True)
+        
         # Wait for disconnection
         disconnected_event = asyncio.Event()
         
@@ -829,13 +1082,7 @@ async def handle_session(ctx: JobContext):
         
         logger.info(f"🛑 [{session_id}] Starting graceful shutdown...")
         
-        # Cancel the monitoring task
-        if 'monitor_task' in locals():
-            monitor_task.cancel()
-            try:
-                await monitor_task
-            except asyncio.CancelledError:
-                pass
+        # Note: monitor_task was removed - TTS refresh happens per-request instead
         
         # Give a moment for cleanup
         await asyncio.sleep(0.5)
