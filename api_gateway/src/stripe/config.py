@@ -25,27 +25,22 @@ class StripeSettings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = Field(..., env="STRIPE_WEBHOOK_SECRET")
     STRIPE_API_VERSION: str = Field("2023-10-16", env="STRIPE_API_VERSION")
 
-    # Hospital-specific price IDs
-    PRICE_HOSP_LITE_MONTHLY: str = Field("price_1RmuCEFVBY798uGmgenKTEZ9", env="PRICE_HOSP_LITE_MONTHLY")
-    PRICE_HOSP_LITE_YEARLY: str = Field("price_1RmuGuFVBY798uGmLdZIB5ht", env="PRICE_HOSP_LITE_YEARLY")
-    PRICE_HOSP_PRO_MONTHLY: str = Field("price_1RmuccFVBY798uGmmr4xqM4E", env="PRICE_HOSP_PRO_MONTHLY")
-    PRICE_HOSP_PRO_YEARLY: str = Field("price_1RmueIFVBY798uGmbKqqnA6N", env="PRICE_HOSP_PRO_YEARLY")
-
-    # Individual-specific price IDs
-    PRICE_IND_LITE_MONTHLY: str = Field("price_1RmugNFVBY798uGmI9U07uyf", env="PRICE_IND_LITE_MONTHLY")
-    PRICE_IND_LITE_YEARLY: str = Field("price_1RmuhKFVBY798uGmwNxbILhR", env="PRICE_IND_LITE_YEARLY")
-    PRICE_IND_PRO_MONTHLY: str = Field("price_1RmuibFVBY798uGmVqAyfsfs", env="PRICE_IND_PRO_MONTHLY")
-    PRICE_IND_PRO_YEARLY: str = Field("price_1RmujKFVBY798uGmZUHIQiPO", env="PRICE_IND_PRO_YEARLY")
+   
 
     # Individual plans (month-based) - phased pricing using Subscription Schedules
     # New canonical envs (month naming)
     IND_1M_INTRO_MONTHLY: str = Field("", env="IND_1M_INTRO_MONTHLY")
-    IND_3M_INTRO_MONTHLY: str = Field("", env="IND_3M_INTRO_MONTHLY")
-    IND_6M_INTRO_MONTHLY: str = Field("", env="IND_6M_INTRO_MONTHLY")
+    
 
     IND_1M_RECUR_MONTHLY: str = Field("", env="IND_1M_RECUR_MONTHLY")
     IND_3M_RECUR_MONTHLY: str = Field("", env="IND_3M_RECUR_MONTHLY")
     IND_6M_RECUR_MONTHLY: str = Field("", env="IND_6M_RECUR_MONTHLY")
+
+    # New: Intro prices that bill per-period upfront (interval_count>1)
+    # - 3-month upfront (quarterly) intro price, e.g., $49.99 every 3 months
+    # - 6-month upfront (semiannual) intro price, e.g., $79.99 every 6 months
+    IND_3M_INTRO_QUARTERLY: str = Field("", env="IND_3M_INTRO_QUARTERLY")
+    IND_6M_INTRO_SEMIANNUAL: str = Field("", env="IND_6M_INTRO_SEMIANNUAL")
 
 
     SUCCESS_URL: str = Field("http://localhost:3000/stripe/success", env="STRIPE_SUCCESS_URL")
