@@ -274,6 +274,22 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
     import uuid
     idem = generate_idem("public_sub_create", body.email, body.plan_code, str(int(time())), uuid.uuid4().hex)
 
+    # Determine if the customer has a resolvable tax location. If not, disable automatic tax to prevent
+    # "customer_tax_location_invalid" errors when creating subscriptions without addresses.
+    auto_tax_enabled = True
+    try:
+        cust_obj = stripe.Customer.retrieve(customer_id)
+        addr = (cust_obj.get("address") or {})
+        ship_addr = ((cust_obj.get("shipping") or {}).get("address") if cust_obj.get("shipping") else None)
+        has_location = bool((addr and addr.get("country")) or (ship_addr and ship_addr.get("country")))
+        if not has_location:
+            auto_tax_enabled = False
+            logger.info("auto_tax_disabled_no_customer_location", extra={"customer_id": customer_id, "email": body.email})
+    except Exception:
+        # If we cannot determine, be safe and disable to avoid hard failures in the funnel
+        auto_tax_enabled = False
+        logger.info("auto_tax_disabled_lookup_failed", extra={"customer_id": customer_id, "email": body.email})
+
     try:
         subscription = stripe.Subscription.create(
             customer=customer_id,
@@ -286,7 +302,7 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
                 plan_type=plan_type,
                 source="funnel",
             ),
-            automatic_tax={"enabled": True},
+            automatic_tax={"enabled": auto_tax_enabled},
             idempotency_key=idem,
         )
     except Exception as e:

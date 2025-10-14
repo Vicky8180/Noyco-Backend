@@ -470,6 +470,17 @@ async def create_subscription(body: CreateSubscriptionBody, current_user=Depends
         idem = generate_idem("sub_create", getattr(current_user, "user_id", "unknown"), body.plan_type.value, str(int(time.time())), _uuid.uuid4().hex)
 
         # Create subscription in default_incomplete state and expand PaymentIntent to get client_secret
+        # Determine auto tax based on customer address availability
+        auto_tax_enabled = True
+        try:
+            cust_obj = stripe.Customer.retrieve(customer_id)
+            addr = (cust_obj.get("address") or {})
+            ship_addr = ((cust_obj.get("shipping") or {}).get("address") if cust_obj.get("shipping") else None)
+            has_location = bool((addr and addr.get("country")) or (ship_addr and ship_addr.get("country")))
+            if not has_location:
+                auto_tax_enabled = False
+        except Exception:
+            auto_tax_enabled = False
         subscription = stripe.Subscription.create(
             customer=customer_id,
             items=[{"price": price_id, "quantity": 1}],
@@ -481,7 +492,7 @@ async def create_subscription(body: CreateSubscriptionBody, current_user=Depends
                 plan_type=body.plan_type.value,
                 source=None,
             ),
-            automatic_tax={"enabled": True},
+            automatic_tax={"enabled": auto_tax_enabled},
             idempotency_key=idem,
         )
 

@@ -30,6 +30,8 @@ def create_checkout_session(*, user, plan_type: str) -> dict:
     # purchase flows generate a brand-new session.
     import time, uuid
     idem_key = generate("checkout", user.user_id, plan_type, str(time.time()), uuid.uuid4().hex)
+    # Note: Since Checkout here uses customer_email and not a full customer with address,
+    # enabling automatic_tax can fail if Stripe cannot resolve the tax location.
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=[{"price": price_id, "quantity": 1}],
@@ -43,7 +45,7 @@ def create_checkout_session(*, user, plan_type: str) -> dict:
             "plan_type": plan_type,
         },
         payment_method_options={"card": {"request_three_d_secure": "any"}},
-        automatic_tax={"enabled": True},
+        automatic_tax={"enabled": False},
         idempotency_key=idem_key,
     )
     return {"id": session.id, "url": session.url}
