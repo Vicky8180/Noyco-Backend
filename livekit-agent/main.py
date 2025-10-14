@@ -589,7 +589,16 @@ class NoycoAssistant(Agent):
                         await asyncio.wait_for(test_stream.__anext__(), timeout=5.0)
                         logger.debug(f"✅ [{self.session_id}] {provider_name} TTS health check passed")
                     except Exception as health_error:
-                        logger.warning(f"⚠️ [{self.session_id}] {provider_name} health check failed: {health_error}")
+                        health_error_str = str(health_error)
+                        
+                        # Check for specific Cartesia quota/rate limit errors
+                        if "402" in health_error_str or "Payment Required" in health_error_str:
+                            logger.error(f"💳 [{self.session_id}] Cartesia health check: Payment Required (402) - Account out of credits!")
+                        elif "429" in health_error_str or "Too Many Requests" in health_error_str:
+                            logger.error(f"⏱️ [{self.session_id}] Cartesia health check: Rate Limit (429) - Too many requests!")
+                        else:
+                            logger.warning(f"⚠️ [{self.session_id}] {provider_name} health check failed: {health_error}")
+                        
                         self.tts_error_count += 1
                         # Switch to fallback if this is the primary and we haven't switched yet
                         if level == 0 and not self.tts_fallback_active:
@@ -939,27 +948,44 @@ async def handle_session(ctx: JobContext):
             error_type = getattr(error_event, 'type', 'unknown')
             error = getattr(error_event, 'error', error_event)
             
-            logger.error(f"💥 [{session_id}] Asynchronous Agent Error Detected - Type: {error_type}, Error: {error}")
-
-            # Check if the error is specifically from the TTS system
-            if error_type == "tts" or "tts" in str(error_type).lower() or "tts_error" in str(error):
+            error_str = str(error)
+            
+            # Check for specific Cartesia API errors (402 Payment Required, 429 Rate Limit)
+            is_cartesia_quota_error = False
+            if "402" in error_str or "Payment Required" in error_str:
+                logger.error(f"� [{session_id}] Cartesia API: Payment Required (402) - Account out of credits!")
+                is_cartesia_quota_error = True
+            elif "429" in error_str or "Too Many Requests" in error_str:
+                logger.error(f"⏱️ [{session_id}] Cartesia API: Rate Limit (429) - Too many requests!")
+                is_cartesia_quota_error = True
+            
+            if is_cartesia_quota_error or error_type == "tts" or "tts" in str(error_type).lower() or "tts_error" in error_str:
+                # Log the full error for debugging
+                logger.error(f"💥 [{session_id}] TTS Error - Type: {error_type}, Error: {error}")
+                
                 # Switch immediately on first error to avoid retries with failed provider
                 if not assistant.tts_fallback_active:
                     switched = assistant._switch_tts_provider()
                     if switched:
-                        logger.info(f"🔄 [{session_id}] TTS provider switched to fallback immediately.")
+                        logger.info(f"🔄 [{session_id}] TTS provider switched to Google fallback due to Cartesia error.")
                     else:
                         # If switching fails, send a text message to the user
                         async def send_fallback_message():
-                            fallback_message = (
-                                "I apologize, but our voice services are experiencing issues. "
-                                "Please try again shortly."
-                            )
+                            if is_cartesia_quota_error:
+                                fallback_message = (
+                                    "I apologize, but our primary voice service has reached its limit. "
+                                    "Switching to backup voice service."
+                                )
+                            else:
+                                fallback_message = (
+                                    "I apologize, but our voice services are experiencing issues. "
+                                    "Please try again shortly."
+                                )
                             await assistant._send_message_to_frontend(fallback_message, "system")
                         
                         asyncio.create_task(send_fallback_message())
             
-            elif error_type == "stt" or "stt" in str(error_type).lower() or "stt_error" in str(error):
+            elif error_type == "stt" or "stt" in str(error_type).lower() or "stt_error" in error_str:
                 if not assistant.stt_fallback_active:
                     logger.error(f"💥 [{session_id}] Asynchronous STT Error Detected: {error}")
                     asyncio.create_task(assistant._handle_stt_failure())
