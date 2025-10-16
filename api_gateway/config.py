@@ -98,6 +98,8 @@ class APIGatewaySettings(BaseSettings):
     FUNNEL_PUBLIC_BILLING_ENABLED: bool = True
     # Rollout flag for custom checkout (Payment Element). When False, legacy Stripe Checkout remains default.
     USE_CUSTOM_CHECKOUT: bool = False
+    # Optional: default country code (e.g., 'US', 'IN') to set on Stripe Customers missing a location in public funnel
+    DEFAULT_TAX_COUNTRY: Optional[str] = None
     
     # API Keys
     GEMINI_API_KEY: str
