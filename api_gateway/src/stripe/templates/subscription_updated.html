@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; color:#111; line-height:1.5;">
+    <div style="max-width:600px; margin:0 auto; padding:24px; border:1px solid #eee; border-radius:8px;">
+      <h2 style="margin-top:0;">Your subscription has been updated</h2>
+      <p>Hi {customerName},</p>
+      <p>Here are the latest details for your subscription.</p>
+      <ul style="padding-left:18px;">
+        <li><strong>Plan:</strong> {plan}</li>
+        <li><strong>Period:</strong> {periodStart} → {periodEnd}</li>
+      </ul>
+      <p>
+        <a href="{manageBillingUrl}" style="display:inline-block; background:#0ea5e9; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px;">Manage Billing</a>
+      </p>
+      <p>If you have questions, reply to this email or contact us at <a href="mailto:{supportEmail}">{supportEmail}</a>.</p>
+      <p style="color:#666;">— Noyco Billing</p>
+    </div>
+  </body>
+</html>

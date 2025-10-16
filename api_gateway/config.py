@@ -166,6 +166,13 @@ class APIGatewaySettings(BaseSettings):
     SMTP_ZOHO_PASS: Optional[str]
     SMTP_HOST: Optional[str] = "smtp.zoho.in"  
     SMTP_PORT: Optional[int] = 465  
+
+    # Email Notifications Configuration
+    EMAIL_NOTIFICATIONS_ENABLED: bool = True
+    EMAIL_FROM: Optional[str] = None
+    EMAIL_BCC_ACCOUNTING: Optional[str] = None
+    SUPPORT_EMAIL: Optional[str] = None
+    MANAGE_BILLING_URL: str = "https://app.noyco.com/billing"
     
     # Server Configuration
     SERVICE_NAME: str = "api-gateway"

@@ -1,0 +1,17 @@
+Hi {customerName},
+
+Payment received — thank you!
+
+Invoice date: {invoiceDate}
+Amount: {amount} {currency}
+Plan: {plan}
+Price: {unitPrice} × {quantity}, every {intervalCount} {interval}
+Billing period: {periodStart} → {periodEnd}
+
+View invoice:
+{hostedInvoiceUrl}
+
+
+If you have questions, reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing

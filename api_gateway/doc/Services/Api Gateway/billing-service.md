@@ -503,6 +503,70 @@ async def load_test_plan_selection():
 ```
 
 ## Configuration
+### Email Notifications (Stripe Transactional Emails)
+
+The API Gateway can send transactional emails for Stripe events (invoices and subscriptions) using Zoho SMTP.
+
+Config flags (in `api_gateway/config.py`):
+
+- `EMAIL_NOTIFICATIONS_ENABLED` (bool, default: `True`)
+- `EMAIL_FROM` (optional): From address for outbound emails
+- `EMAIL_BCC_ACCOUNTING` (optional): Address to BCC on billing emails
+- `SUPPORT_EMAIL` (optional): Displayed in templates for contact
+- `MANAGE_BILLING_URL` (default: `https://app.noyco.com/billing`): Link for “Manage Billing”
+
+SMTP (Zoho) configuration:
+
+- `SMTP_ZOHO_USER`, `SMTP_ZOHO_PASS`
+- `SMTP_HOST` (default: `smtp.zoho.in`), `SMTP_PORT` (default: `465`)
+
+### Email Templates
+
+Location: `api_gateway/src/stripe/templates/`
+
+Each event has both `.txt` and `.html` versions:
+
+- `invoice_paid.{txt,html}`
+- `invoice_failed.{txt,html}`
+- `invoice_upcoming.{txt,html}`
+- `subscription_started.{txt,html}`
+- `subscription_updated.{txt,html}`
+- `subscription_canceled.{txt,html}`
+
+Placeholders include: `{amount}`, `{currency}`, `{plan}`, `{periodStart}`, `{periodEnd}`, `{invoiceDate}`, `{dueDate}`, `{customerName}`, `{manageBillingUrl}`, `{supportEmail}`.
+
+HTML templates use minimal inline styling and include a “Manage Billing” button linking to `{manageBillingUrl}`.
+
+### Multipart Sending
+
+`_send_email` in `api_gateway/src/auth/email_service.py` supports multipart/alternative:
+
+- Pass `html_body` to send both HTML (preferred) and text fallback.
+- If `html_body` is omitted, a plain-text email is sent.
+- BCC is added automatically when `EMAIL_BCC_ACCOUNTING` is configured.
+
+### Stripe CLI testing
+
+Run the Stripe CLI and forward events to your local API Gateway’s `/stripe/webhook` endpoint. Example events:
+
+```
+stripe trigger invoice.payment_succeeded
+stripe trigger invoice.payment_failed
+stripe trigger invoice.upcoming
+stripe trigger customer.subscription.created
+stripe trigger customer.subscription.updated
+stripe trigger customer.subscription.deleted
+```
+
+### Dev-only test route (optional)
+
+In non-production environments, a helper route is available to send a sample email:
+
+- `GET /stripe/email/test?type=invoice_paid&to=someone@example.com`
+
+Allowed `type` values: `invoice_paid`, `invoice_failed`, `invoice_upcoming`, `subscription_started`, `subscription_updated`, `subscription_canceled`.
+
+This route renders the corresponding text + HTML templates and sends a multipart email using configured SMTP settings.
 
 ### Environment Variables
 
