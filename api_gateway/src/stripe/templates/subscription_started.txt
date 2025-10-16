@@ -1,0 +1,13 @@
+Hi {customerName},
+
+Your subscription has started.
+
+Plan: {plan}
+Period: {periodStart} → {periodEnd}
+
+You can manage your subscription here:
+{manageBillingUrl}
+
+If you have questions, reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing

@@ -1,0 +1,13 @@
+Hi {customerName},
+
+Your subscription has been canceled.
+
+Plan: {plan}
+End of service period: {periodEnd}
+
+If this was a mistake or you’d like to reactivate, you can manage your subscription here:
+{manageBillingUrl}
+
+If you have questions, reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing

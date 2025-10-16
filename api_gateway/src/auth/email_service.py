@@ -7,7 +7,7 @@ from typing import Optional
 import smtplib
 from passlib.context import CryptContext
 from pymongo import MongoClient
-from ...config import get_settings
+from api_gateway.config import get_settings
 
 # Get configuration
 settings = get_settings()
@@ -62,7 +62,15 @@ def _store_otp(email: str, otp_plain: str, *, purpose: str = "signup"):
     })
 
 
-def _send_email(to_email: str, subject: str, body: str):
+def _send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: Optional[str] = None,
+    *,
+    bcc: Optional[str] = None,
+    from_email: Optional[str] = None,
+):
     # Development-friendly fallback: if SMTP is not configured and we're not in production,
     # log the e-mail content to console and return gracefully so OTP flows are testable locally.
     if not SMTP_USER or not SMTP_PASS:
@@ -78,9 +86,24 @@ def _send_email(to_email: str, subject: str, body: str):
     
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = f"Noyco <{SMTP_USER}>"
+    # Prefer configured EMAIL_FROM, then explicit from_email, then SMTP_USER
+    configured_from = from_email or getattr(settings, "EMAIL_FROM", None) or SMTP_USER
+    msg["From"] = f"Noyco <{configured_from}>" if configured_from else "Noyco"
     msg["To"] = to_email
-    msg.set_content(body)
+
+    # Add optional BCC from config and parameter
+    bcc_config = getattr(settings, "EMAIL_BCC_ACCOUNTING", None)
+    final_bcc = bcc or bcc_config
+    if final_bcc:
+        msg["Bcc"] = final_bcc
+
+    # Multipart/alternative if HTML is provided; otherwise plain text
+    if html_body:
+        # Explicitly set UTF-8 charsets for better mobile compatibility
+        msg.set_content(body, subtype="plain", charset="utf-8")
+        msg.add_alternative(html_body, subtype="html", charset="utf-8")
+    else:
+        msg.set_content(body, subtype="plain", charset="utf-8")
 
     context = ssl.create_default_context()
     try:

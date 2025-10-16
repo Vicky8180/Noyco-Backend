@@ -1,0 +1,13 @@
+Hi {customerName},
+
+Your subscription has been updated.
+
+Plan: {plan}
+Period: {periodStart} → {periodEnd}
+
+Review or manage your subscription here:
+{manageBillingUrl}
+
+If you have questions, reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing
