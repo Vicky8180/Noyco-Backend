@@ -276,18 +276,28 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
 
     # Determine if the customer has a resolvable tax location. If not, disable automatic tax to prevent
     # "customer_tax_location_invalid" errors when creating subscriptions without addresses.
-    auto_tax_enabled = True
+    auto_tax_enabled = False
     try:
         cust_obj = stripe.Customer.retrieve(customer_id)
         addr = (cust_obj.get("address") or {})
         ship_addr = ((cust_obj.get("shipping") or {}).get("address") if cust_obj.get("shipping") else None)
         has_location = bool((addr and addr.get("country")) or (ship_addr and ship_addr.get("country")))
-        if not has_location:
-            auto_tax_enabled = False
+        if has_location:
+            auto_tax_enabled = True
+        else:
             logger.info("auto_tax_disabled_no_customer_location", extra={"customer_id": customer_id, "email": body.email})
+            # Optional fallback: set a default country to satisfy Stripe tax location requirement
+            default_country = getattr(get_app_settings(), "DEFAULT_TAX_COUNTRY", None)
+            if default_country:
+                try:
+                    stripe.Customer.modify(customer_id, address={"country": default_country})
+                    auto_tax_enabled = True  # now safe to enable if desired
+                    logger.info("customer_country_defaulted", extra={"customer_id": customer_id, "country": default_country})
+                except Exception:
+                    # Non-fatal: leave auto tax disabled
+                    pass
     except Exception:
-        # If we cannot determine, be safe and disable to avoid hard failures in the funnel
-        auto_tax_enabled = False
+        # If we cannot determine, keep disabled to avoid hard failures in the funnel
         logger.info("auto_tax_disabled_lookup_failed", extra={"customer_id": customer_id, "email": body.email})
 
     try:
@@ -302,7 +312,6 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
                 plan_type=plan_type,
                 source="funnel",
             ),
-            automatic_tax={"enabled": auto_tax_enabled},
             idempotency_key=idem,
         )
     except Exception as e:
