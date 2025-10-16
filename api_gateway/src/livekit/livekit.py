@@ -426,7 +426,7 @@ async def create_voice_session(request: VoiceSessionRequest):
 async def process_voice_message(request: VoiceMessageRequest):
     """
     Process voice message with intent detection and orchestration
-    This endpoint is called by the LiveKit AI agent (main_prod.py)
+    This endpoint is called by the LiveKit AI agent (main.py)
     """
     try:
         logger.info(f"=== Processing voice message for session: {request.session_id} ===")
@@ -834,7 +834,7 @@ async def process_message_internal(session_id: str, text: str, session_data: dic
             
             orchestrator_response = await send_to_orchestrator(orchestrator_payload)
             
-            assistant_response = orchestrator_response.get("response", "I'm here to help.") if orchestrator_response else "I'm here to help."
+            assistant_response = orchestrator_response.get("response", "I'm here to help.") if orchestrator_response else "I'm here to help. But right now having some internal problems."
             
             # Update context
             session_data["conversation_state"]["context_history"].append({
