@@ -1,0 +1,6 @@
+Enable Weekly Digest
+
+Click the link below to start receiving weekly emails:
+{{ opt_in_url }}
+
+If you did not request this, you can ignore this message.

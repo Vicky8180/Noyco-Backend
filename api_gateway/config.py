@@ -172,9 +172,34 @@ class APIGatewaySettings(BaseSettings):
     # Email Notifications Configuration
     EMAIL_NOTIFICATIONS_ENABLED: bool = True
     EMAIL_FROM: Optional[str] = None
+    EMAIL_FROM_NAME: Optional[str] = None
     EMAIL_BCC_ACCOUNTING: Optional[str] = None
     SUPPORT_EMAIL: Optional[str] = None
     MANAGE_BILLING_URL: str = "https://app.noyco.com/billing"
+
+    # Weekly Digest & Provider Configuration
+    # Global feature flag to enable/disable weekly digest execution
+    EMAIL_WEEKLY_ENABLED: bool = False
+    # Pluggable email provider selection (e.g., 'mailerlite', 'none')
+    EMAIL_PROVIDER: str = "none"
+    # Provider-specific API keys (kept optional for safe defaults)
+    MAILERLITE_API_KEY: Optional[str] = None
+    MAILERSEND_API_KEY: Optional[str] = None
+    MAILERSEND_WEBHOOK_SECRET: Optional[str] = None
+    # Canary rollout percentage for MailerSend selection (0-100). Used when EMAIL_PROVIDER is set to 'canary'.
+    MAILERSEND_PERCENT: int = 0
+    # Provider-specific default From for MailerSend (optional). Falls back to EMAIL_FROM/EMAIL_FROM_NAME if unset.
+    MAILERSEND_FROM: Optional[str] = None
+    MAILERSEND_FROM_NAME: Optional[str] = None
+    # Weekly schedule (UTC): 0=Monday .. 6=Sunday; hour=0..23
+    WEEKLY_DIGEST_DAY_UTC: int = 1  # default Tuesday
+    WEEKLY_DIGEST_HOUR_UTC: int = 9  # 09:00 UTC by default
+    # Signing secret for opt-in/out tokens
+    EMAIL_TOGGLE_SECRET: Optional[str] = None
+
+    # Content Provider Configuration
+    CONTENT_PROVIDER: str = "metrics_existing"  # pluggable content source
+    METRICS_COLLECTION_NAME: str = "metrics"    # existing metrics collection name
     
     # Server Configuration
     SERVICE_NAME: str = "api-gateway"
