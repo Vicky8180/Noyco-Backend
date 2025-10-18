@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Literal, Optional, Dict
 from time import time
 import logging
+from datetime import datetime, timedelta, timezone
+import os
+from urllib.parse import urlencode
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Stripe config and client
 from ..stripe.config import get_settings as get_stripe_settings
@@ -10,6 +15,17 @@ from ..stripe.client import get_stripe
 from ..stripe.idempotency import generate as generate_idem
 from ..stripe.utils import build_subscription_metadata
 from ...database.db import get_database
+from ...config import get_settings as get_app_settings
+from ...middlewares.jwt_auth import JWTAuthController
+from ...services.tokens.email_toggle_tokens import (
+    create_opt_in_token,
+    create_opt_out_token,
+    validate_token,
+    InvalidToken,
+    ExpiredToken,
+)
+from ...services.email.factory import get_email_provider
+from ...services.content.factory import get_content_provider
 from ..billing.schema import UserRole
 from ...config import get_settings as get_app_settings
 from ..auth.email_service import send_signup_otp
@@ -18,8 +34,37 @@ from ..stripe.services.webhooks import handle_checkout_completed
 from fastapi import Depends
 from ...database.db import get_database
 
-router = APIRouter(prefix="/public", tags=["Public Billing"])
+router = APIRouter(prefix="/public", tags=["Public Billing", "Public Email Digest"])
 logger = logging.getLogger("public.billing")
+
+jwt_auth = JWTAuthController()
+
+
+# -----------------------------
+# Email Digest Helpers
+# -----------------------------
+
+def _templates_env():
+    # Resolve templates dir: api_gateway/services/email/templates
+    current_dir = os.path.dirname(__file__)  # .../api_gateway/src/public
+    api_gateway_dir = os.path.dirname(os.path.dirname(current_dir))  # .../api_gateway
+    templates_dir = os.path.join(api_gateway_dir, "services", "email", "templates")
+    env = Environment(
+        loader=FileSystemLoader(templates_dir),
+        autoescape=select_autoescape(['html', 'xml'])
+    )
+    return env
+
+
+def _build_public_url(path: str, query: Dict[str, str]) -> str:
+    base = get_app_settings().HOST_URL.rstrip('/')
+    return f"{base}{path}?{urlencode(query)}"
+
+
+def _week_window(now_utc: Optional[datetime] = None) -> tuple[datetime, datetime]:
+    now_utc = now_utc or datetime.now(timezone.utc)
+    start = now_utc - timedelta(days=7)
+    return (start, now_utc)
 
 
 # -----------------------------
@@ -276,18 +321,28 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
 
     # Determine if the customer has a resolvable tax location. If not, disable automatic tax to prevent
     # "customer_tax_location_invalid" errors when creating subscriptions without addresses.
-    auto_tax_enabled = True
+    auto_tax_enabled = False
     try:
         cust_obj = stripe.Customer.retrieve(customer_id)
         addr = (cust_obj.get("address") or {})
         ship_addr = ((cust_obj.get("shipping") or {}).get("address") if cust_obj.get("shipping") else None)
         has_location = bool((addr and addr.get("country")) or (ship_addr and ship_addr.get("country")))
-        if not has_location:
-            auto_tax_enabled = False
+        if has_location:
+            auto_tax_enabled = True
+        else:
             logger.info("auto_tax_disabled_no_customer_location", extra={"customer_id": customer_id, "email": body.email})
+            # Optional fallback: set a default country to satisfy Stripe tax location requirement
+            default_country = getattr(get_app_settings(), "DEFAULT_TAX_COUNTRY", None)
+            if default_country:
+                try:
+                    stripe.Customer.modify(customer_id, address={"country": default_country})
+                    auto_tax_enabled = True  # now safe to enable if desired
+                    logger.info("customer_country_defaulted", extra={"customer_id": customer_id, "country": default_country})
+                except Exception:
+                    # Non-fatal: leave auto tax disabled
+                    pass
     except Exception:
-        # If we cannot determine, be safe and disable to avoid hard failures in the funnel
-        auto_tax_enabled = False
+        # If we cannot determine, keep disabled to avoid hard failures in the funnel
         logger.info("auto_tax_disabled_lookup_failed", extra={"customer_id": customer_id, "email": body.email})
 
     try:
@@ -302,7 +357,6 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
                 plan_type=plan_type,
                 source="funnel",
             ),
-            automatic_tax={"enabled": auto_tax_enabled},
             idempotency_key=idem,
         )
     except Exception as e:
@@ -338,6 +392,162 @@ async def public_create_subscription(body: PublicCreateSubscriptionRequest):
         subscription_id=subscription.get("id"),
         customer_id=customer_id,
     )
+
+
+# -----------------------------------------------------------------------------
+# Email Digest: request opt-in (authenticated), opt-in/out handlers, preview
+# -----------------------------------------------------------------------------
+
+class RequestOptInResponse(BaseModel):
+    sent: bool
+    retry_after_seconds: Optional[int] = None
+
+
+@router.post("/email-digest/request-opt-in", response_model=RequestOptInResponse)
+async def request_email_digest_opt_in(request: Request):
+    """Authenticated: sends an opt-in email with a secure token link.
+    Rate-limited by a cooldown on the user's document to avoid abuse.
+    """
+    # Auth
+    current_user = jwt_auth.get_current_user(request)
+    if current_user.role != "individual":
+        raise HTTPException(status_code=403, detail="Only individuals can opt in")
+
+    db = get_database()
+    user_doc = db.users.find_one({"id": current_user.user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    email = user_doc.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="User email missing")
+
+    # Simple rate limit: 10 minutes cooldown
+    cooldown_seconds = 600
+    now = datetime.utcnow()
+    last = user_doc.get("weekly_digest_optin_last_sent_at")
+    if last and isinstance(last, datetime):
+        delta = (now - last).total_seconds()
+        if delta < cooldown_seconds:
+            return RequestOptInResponse(sent=False, retry_after_seconds=int(cooldown_seconds - delta))
+
+    # Build opt-in URL
+    token = create_opt_in_token(current_user.user_id)
+    opt_in_url = _build_public_url("/public/email-digest/opt-in", {"token": token})
+
+    # Render email
+    env = _templates_env()
+    html_tpl = env.get_template("toggle_opt_in.html")
+    txt_tpl = env.get_template("toggle_opt_in.txt")
+    html = html_tpl.render(opt_in_url=opt_in_url)
+    text = txt_tpl.render(opt_in_url=opt_in_url)
+
+    # Send email via provider
+    provider = get_email_provider()
+    subject = "Enable your weekly digest"
+    result = provider.send_email(to=email, subject=subject, html=html, text=text)
+    if not result.ok:
+        logger.error("opt_in_email_send_failed", extra={"user_id": current_user.user_id, "error": result.error})
+        raise HTTPException(status_code=502, detail="Failed to send opt-in email")
+
+    # Update last sent timestamp
+    db.users.update_one({"id": current_user.user_id}, {"$set": {"weekly_digest_optin_last_sent_at": now}})
+    return RequestOptInResponse(sent=True)
+
+
+class ToggleResponse(BaseModel):
+    ok: bool
+    enabled: Optional[bool] = None
+
+
+@router.get("/email-digest/opt-in", response_model=ToggleResponse)
+async def email_digest_opt_in(token: str = Query(...)):
+    try:
+        user_id, action = validate_token(token)
+        if action != "opt_in":
+            raise InvalidToken("Wrong action")
+    except ExpiredToken:
+        raise HTTPException(status_code=400, detail="Token expired")
+    except InvalidToken as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {e}")
+
+    db = get_database()
+    user = db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") != "individual":
+        raise HTTPException(status_code=403, detail="Only individuals can opt in")
+
+    individual_id = user.get("role_entity_id")
+    if not individual_id:
+        raise HTTPException(status_code=400, detail="Missing individual id")
+
+    db.individuals.update_one({"id": individual_id}, {"$set": {"weekly_digest_enabled": True}})
+    return ToggleResponse(ok=True, enabled=True)
+
+
+@router.get("/email-digest/opt-out", response_model=ToggleResponse)
+async def email_digest_opt_out(token: str = Query(...)):
+    try:
+        user_id, action = validate_token(token)
+        if action != "opt_out":
+            raise InvalidToken("Wrong action")
+    except ExpiredToken:
+        raise HTTPException(status_code=400, detail="Token expired")
+    except InvalidToken as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {e}")
+
+    db = get_database()
+    user = db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") != "individual":
+        raise HTTPException(status_code=403, detail="Only individuals can opt out")
+
+    individual_id = user.get("role_entity_id")
+    if not individual_id:
+        raise HTTPException(status_code=400, detail="Missing individual id")
+
+    db.individuals.update_one({"id": individual_id}, {"$set": {"weekly_digest_enabled": False}})
+    return ToggleResponse(ok=True, enabled=False)
+
+
+@router.get("/email-digest/preview")
+async def email_digest_preview(user_id: str = Query(...)):
+    """Dev/Admin preview: render weekly digest HTML using current ContentProvider.
+    Only allowed when not in production environment to avoid info leaks.
+    """
+    app_settings = get_app_settings()
+    env = (getattr(app_settings, "ENVIRONMENT", "development") or "development").lower()
+    if env == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    db = get_database()
+    user = db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    week_start, week_end = _week_window()
+    content_provider = get_content_provider()
+    payload = content_provider.get_weekly_content(user_id=user_id, week_start=week_start, week_end=week_end)
+
+    # Build unsubscribe link for preview
+    opt_out_token = create_opt_out_token(user_id)
+    unsubscribe_url = _build_public_url("/public/email-digest/opt-out", {"token": opt_out_token})
+
+    env_t = _templates_env()
+    html_tpl = env_t.get_template("weekly_digest.html")
+    html = html_tpl.render(
+        title=payload.title,
+        intro=payload.intro,
+        metrics=payload.metrics,
+        agents_used=payload.agents_used,
+        latest_conversation=payload.latest_conversation,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html, status_code=200)
 
 
 # -----------------------------------------------------------------------------

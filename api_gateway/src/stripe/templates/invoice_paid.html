@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Invoice</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; color:#111; line-height:1.5; margin:0; padding:0;">
+    <div style="max-width:600px; margin:0 auto; padding:24px; border:1px solid #eee; border-radius:8px;">
+      <h2 style="margin-top:0;">Payment received — thank you!</h2>
+      <p>Hi {customerName},</p>
+      <p>We've received your payment.</p>
+      <ul style="padding-left:18px;">
+        <li><strong>Invoice date:</strong> {invoiceDate}</li>
+        <li><strong>Amount:</strong> {amount} {currency}</li>
+        <li><strong>Plan:</strong> {plan}</li>
+        <li><strong>Price:</strong> {unitPrice} × {quantity}, every {intervalCount} {interval}</li>
+        <li><strong>Billing period:</strong> {periodStart} → {periodEnd}</li>
+      </ul>
+      <!-- Mobile-friendly button (no VML, minimal CSS) -->
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 8px 0;">
+        <tr>
+          <td align="center" bgcolor="#10b981" style="border-radius:6px;">
+            <a href="{hostedInvoiceUrl}" rel="noopener noreferrer" style="display:block; padding:12px 20px; font-family: Arial, sans-serif; font-size:16px; line-height:100%; color:#ffffff; text-decoration:none; cursor:pointer;">
+              View Invoice
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:12px; color:#555; margin-top:8px;">
+        If the button doesn't open, tap or copy this link:<br>
+        <a href="{hostedInvoiceUrl}" rel="noopener noreferrer" style="color:#0ea5e9; word-break:break-all; cursor:pointer;">{hostedInvoiceUrl}</a>
+      </p>
+      <p>If you have questions, reply to this email or contact us at <a href="mailto:{supportEmail}">{supportEmail}</a>.</p>
+      <p style="color:#666;">— Noyco Billing</p>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{{ title or 'Your weekly summary' }}
+
+{% if intro %}{{ intro }}
+{% endif %}
+
+{% if metrics and metrics|length > 0 %}
+Metrics:
+{% for key, value in metrics.items() %}- {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+
+{% if agents_used and agents_used|length > 0 %}
+Agents used: {{ agents_used | join(', ') }}
+{% endif %}
+
+{% if latest_conversation %}
+Latest conversation:
+{% if latest_conversation.agent_name %}Agent: {{ latest_conversation.agent_name }}
+{% endif %}
+{% if latest_conversation.excerpt %}{{ latest_conversation.excerpt }}
+{% endif %}
+{% endif %}
+
+--
+You’re receiving this because you opted in to weekly updates.
+Unsubscribe: {{ unsubscribe_url }}

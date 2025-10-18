@@ -10,6 +10,14 @@ from ...billing.schema import UserRole, PlanType, PlanStatus
 from ...billing.controller import BillingController
 from ...auth.controller import AuthController
 from ...auth.email_service import send_signup_otp
+from .notifications import (
+    send_invoice_paid,
+    send_invoice_failed,
+    send_invoice_upcoming,
+    send_subscription_started,
+    send_subscription_updated,
+    send_subscription_canceled,
+)
 
 
 # Stripe client and settings (tests may monkeypatch these module attributes)
@@ -156,6 +164,15 @@ async def handle_checkout_completed(event: Dict[str, Any]):
 
 async def handle_invoice_payment_failed(event: Dict[str, Any]):
     invoice = event["data"]["object"]
+    # Enrich invoice with hosted link if missing (best-effort)
+    try:
+        if not invoice.get("hosted_invoice_url") and invoice.get("id"):
+            fetched = stripe.Invoice.retrieve(invoice.get("id"))
+            if isinstance(fetched, dict):
+                invoice["hosted_invoice_url"] = fetched.get("hosted_invoice_url")
+                invoice["invoice_pdf"] = fetched.get("invoice_pdf")
+    except Exception:
+        pass
     metadata = invoice.get("metadata", {})
     role = metadata.get("role")
     role_entity_id = metadata.get("role_entity_id")
@@ -172,6 +189,17 @@ async def handle_invoice_payment_failed(event: Dict[str, Any]):
                 }},
             )
         log("invoice_payment_failed", metadata, "ok")
+        # Trigger notification (non-blocking best-effort)
+        try:
+            customer = None
+            try:
+                if invoice.get("customer"):
+                    customer = stripe.Customer.retrieve(invoice.get("customer"))
+            except Exception:
+                customer = None
+            send_invoice_failed(event, invoice, customer)
+        except Exception as e:
+            log("invoice_failed_email", {"invoice_id": invoice.get("id")}, "error", str(e))
     except Exception as e:
         log("invoice_payment_failed", metadata, "error", str(e))
         raise
@@ -185,6 +213,15 @@ async def handle_invoice_payment_succeeded(event: Dict[str, Any]):
     - Provisions public Individual + OTP if needed
     """
     invoice = event["data"]["object"]
+    # Enrich invoice with hosted link if missing (best-effort)
+    try:
+        if not invoice.get("hosted_invoice_url") and invoice.get("id"):
+            fetched = stripe.Invoice.retrieve(invoice.get("id"))
+            if isinstance(fetched, dict):
+                invoice["hosted_invoice_url"] = fetched.get("hosted_invoice_url")
+                invoice["invoice_pdf"] = fetched.get("invoice_pdf")
+    except Exception:
+        pass
     metadata = invoice.get("metadata", {})
     role = metadata.get("role")
     role_entity_id = metadata.get("role_entity_id")
@@ -476,6 +513,17 @@ async def handle_invoice_payment_succeeded(event: Dict[str, Any]):
             log("schedule_on_first_invoice", metadata, "error", str(e))
 
         log("invoice_payment_succeeded", metadata, "ok")
+        # Trigger notification (non-blocking best-effort)
+        try:
+            customer = None
+            try:
+                if invoice.get("customer"):
+                    customer = stripe.Customer.retrieve(invoice.get("customer"))
+            except Exception:
+                customer = None
+            send_invoice_paid(event, invoice, customer)
+        except Exception as e:
+            log("invoice_paid_email", {"invoice_id": invoice.get("id")}, "error", str(e))
     except Exception as e:
         log("invoice_payment_succeeded", metadata, "error", str(e))
         raise
@@ -523,6 +571,11 @@ async def handle_subscription_updated(event: Dict[str, Any]):
             "event_id": event.get("id"),
         }, "ok")
         log("subscription_updated", metadata, "ok")
+        # Trigger notification (best-effort)
+        try:
+            send_subscription_updated(event, subscription, None)
+        except Exception as e:
+            log("subscription_updated_email", {"subscription_id": subscription.get("id")}, "error", str(e))
     except Exception as e:
         log("subscription_updated", metadata, "error", str(e))
         raise
@@ -555,8 +608,35 @@ async def handle_subscription_deleted(event: Dict[str, Any]):
             "event_id": event.get("id"),
         }, "ok")
         log("subscription_deleted", metadata, "ok")
+        # Trigger notification (best-effort)
+        try:
+            send_subscription_canceled(event, subscription, None)
+        except Exception as e:
+            log("subscription_canceled_email", {"subscription_id": subscription.get("id")}, "error", str(e))
+
     except Exception as e:
         log("subscription_deleted", metadata, "error", str(e))
+        raise
+
+
+async def handle_invoice_upcoming(event: Dict[str, Any]):
+    upcoming_invoice = event["data"]["object"]
+    metadata = upcoming_invoice.get("metadata", {})
+    try:
+        # No DB mutation here; just best-effort notify
+        try:
+            customer = None
+            try:
+                if upcoming_invoice.get("customer"):
+                    customer = stripe.Customer.retrieve(upcoming_invoice.get("customer"))
+            except Exception:
+                customer = None
+            send_invoice_upcoming(event, upcoming_invoice, customer)
+        except Exception as e:
+            log("invoice_upcoming_email", {"invoice_id": upcoming_invoice.get("id")}, "error", str(e))
+        log("invoice_upcoming", metadata, "ok")
+    except Exception as e:
+        log("invoice_upcoming", metadata, "error", str(e))
         raise
 
 
@@ -565,8 +645,11 @@ dispatch_map = {
     "checkout.session.completed": handle_checkout_completed,
     "invoice.payment_failed": handle_invoice_payment_failed,
     "invoice.payment_succeeded": handle_invoice_payment_succeeded,
+    "invoice.upcoming": handle_invoice_upcoming,
     "customer.subscription.updated": handle_subscription_updated,
     "customer.subscription.deleted": handle_subscription_deleted,
+    # Created -> started email
+    "customer.subscription.created": handle_subscription_updated,
 }
 
 

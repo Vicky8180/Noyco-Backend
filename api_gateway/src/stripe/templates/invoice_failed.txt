@@ -1,0 +1,15 @@
+Hi {customerName},
+
+We couldn't process your recent payment.
+
+Invoice date: {invoiceDate}
+Amount: {amount} {currency}
+Plan: {plan}
+Due date: {dueDate}
+
+Please update your payment method or try again here:
+{manageBillingUrl}
+
+If you need help, reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing

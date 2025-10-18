@@ -1,0 +1,15 @@
+Hi {customerName},
+
+Heads up — your next invoice is coming up.
+
+Invoice date: {invoiceDate}
+Amount: {amount} {currency}
+Plan: {plan}
+Period: {periodStart} → {periodEnd}
+
+Review your billing details here:
+{manageBillingUrl}
+
+Questions? Reply to this email or contact us at {supportEmail}.
+
+— Noyco Billing

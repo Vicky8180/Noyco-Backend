@@ -338,6 +338,48 @@ async def resume_subscription(body: ResumeBody, current_user=Depends(jwt_auth.ge
     except stripe.error.InvalidRequestError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+# ---------------------------------------------------------------------------
+# Dev-only test route for sending sample billing emails (multipart)
+# ---------------------------------------------------------------------------
+
+@router.get("/email/test", include_in_schema=False)
+async def email_test(type: str, to: str):
+    env = getattr(settings, "ENVIRONMENT", "development").lower()
+    if env == "production":
+        raise HTTPException(status_code=403, detail="Not available in production")
+    # Import here to avoid circulars
+    from .services.notifications import _send_notification
+    from .services.templates import render_templates
+    from ...config import get_settings as _get
+    s = _get()
+    # Minimal vars to render
+    vars = {
+        "customerName": "Test User",
+        "invoiceDate": "2025-10-15",
+        "amount": "50.00",
+        "currency": "USD",
+        "plan": "Pro",
+        "periodStart": "2025-10-01",
+        "periodEnd": "2025-11-01",
+        "dueDate": "2025-10-20",
+        "manageBillingUrl": getattr(s, "MANAGE_BILLING_URL", "https://app.noyco.com/billing"),
+        "supportEmail": getattr(s, "SUPPORT_EMAIL", "support@noyco.com"),
+    }
+    subjects = {
+        "invoice_paid": "Payment received — thank you!",
+        "invoice_failed": "We couldn't process your payment",
+        "invoice_upcoming": "Upcoming invoice",
+        "subscription_started": "Your subscription has started",
+        "subscription_updated": "Your subscription has been updated",
+        "subscription_canceled": "Your subscription has been canceled",
+    }
+    if type not in subjects:
+        raise HTTPException(status_code=400, detail="Unknown type")
+    rendered = render_templates(type, vars)
+    from ...auth.email_service import _send_email
+    _send_email(to, subjects[type], rendered["text"], html_body=rendered.get("html"))
+    return {"status": "sent", "type": type, "to": to}
+
 @router.get("/customer/{customer_id}/invoices")
 async def list_invoices(customer_id: str, current_user=Depends(jwt_auth.get_current_user)):
     try:
@@ -470,17 +512,8 @@ async def create_subscription(body: CreateSubscriptionBody, current_user=Depends
         idem = generate_idem("sub_create", getattr(current_user, "user_id", "unknown"), body.plan_type.value, str(int(time.time())), _uuid.uuid4().hex)
 
         # Create subscription in default_incomplete state and expand PaymentIntent to get client_secret
-        # Determine auto tax based on customer address availability
-        auto_tax_enabled = True
-        try:
-            cust_obj = stripe.Customer.retrieve(customer_id)
-            addr = (cust_obj.get("address") or {})
-            ship_addr = ((cust_obj.get("shipping") or {}).get("address") if cust_obj.get("shipping") else None)
-            has_location = bool((addr and addr.get("country")) or (ship_addr and ship_addr.get("country")))
-            if not has_location:
-                auto_tax_enabled = False
-        except Exception:
-            auto_tax_enabled = False
+        # Important: Disable automatic tax at creation to avoid 'customer_tax_location_invalid' when customer has no address.
+        auto_tax_enabled = False
         subscription = stripe.Subscription.create(
             customer=customer_id,
             items=[{"price": price_id, "quantity": 1}],
@@ -492,7 +525,6 @@ async def create_subscription(body: CreateSubscriptionBody, current_user=Depends
                 plan_type=body.plan_type.value,
                 source=None,
             ),
-            automatic_tax={"enabled": auto_tax_enabled},
             idempotency_key=idem,
         )
 
