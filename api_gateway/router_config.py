@@ -31,6 +31,15 @@ def setup_routers(app):
     from .src.metrics.routes import router as metrics_router
     from .src.metrics.agent_routes import router as agent_metrics_router
     from .src.documentation.router import router as documentation_router
+    # Import admin router directly; avoid package-level imports to prevent early imports
+    try:
+        from .src.admin.routes import router as admin_users_router
+        from .src.admin.conversations.routes import router as admin_conversations_router
+        from .src.admin.billing.routes import router as admin_billing_router
+    except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Failed to import admin routes: %s\n%s", e, traceback.format_exc())
+        raise
     from .src.public.routes import router as public_router
     from .src.notifications.webhooks_mailersend import router as mailersend_webhooks_router
 
@@ -63,6 +72,10 @@ def setup_routers(app):
     # Analytics and monitoring
     app.include_router(metrics_router, tags=["Metrics"])
     app.include_router(agent_metrics_router, tags=["Agent Metrics"])
+    # Admin
+    app.include_router(admin_users_router, tags=["Admin Users"])
+    app.include_router(admin_conversations_router, tags=["Admin Conversations"])
+    app.include_router(admin_billing_router, tags=["Admin Billing"])
     
     # Documentation
     app.include_router(documentation_router, tags=["Documentation"])
